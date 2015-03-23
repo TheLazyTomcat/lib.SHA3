@@ -7,7 +7,7 @@
 -------------------------------------------------------------------------------}
 {===============================================================================
 
-  SHA3/Keccak Hash Calculation
+  SHA3/Keccak hash calculation
 
   ©František Milt 2015-03-23
 
@@ -18,7 +18,7 @@
     Keccak256
     Keccak384
     Keccak512
-    Keccak[] (Keccak_b)
+    Keccak[] (in this library marked as Keccak_b)
     SHA3-224
     SHA3-256
     SHA3-384
