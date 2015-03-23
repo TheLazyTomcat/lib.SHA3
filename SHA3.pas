@@ -1,3 +1,32 @@
+{-------------------------------------------------------------------------------
+
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+-------------------------------------------------------------------------------}
+{===============================================================================
+
+  SHA3/Keccak Hash Calculation
+
+  ©František Milt 2015-03-23
+
+  Version 1.0
+
+  Following hash variants are supported in current implementation:
+    Keccak224
+    Keccak256
+    Keccak384
+    Keccak512
+    Keccak[] (Keccak_b)
+    SHA3-224
+    SHA3-256
+    SHA3-384
+    SHA3-512
+    SHAKE128
+    SHAKE256
+
+===============================================================================}
 unit SHA3;
 
 interface
@@ -81,6 +110,17 @@ Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: LongWo
 Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: LongWord = 0): TSHA3Hash;
 Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: LongWord = 0): TSHA3Hash;
 
+//------------------------------------------------------------------------------
+
+type
+  TSHA3Context = type Pointer;
+
+Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3Context;
+procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TSize);
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TSize): TSHA3Hash; overload;
+Function SHA3_Final(var Context: TSHA3Context): TSHA3Hash; overload;
+Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash;
+
 
 implementation
 
@@ -96,7 +136,6 @@ const
     $8000000000008002, $8000000000000080, $000000000000800A, $800000008000000A,
     $8000000080008081, $8000000000008080, $0000000080000001, $8000000080008008);
 
-
   RotateCoefs: Array[0..4,0..4] of Byte = ( // first index is X, second Y
     {X = 0} ( 0,36, 3,41,18),
     {X = 1} ( 1,44,10,45, 2),
@@ -104,7 +143,17 @@ const
     {X = 3} (28,55,25,21,56),
     {X = 4} (27,20,39, 8,14));
 
+type
+  TSHA3Context_Internal = record
+    HashState:      TSHA3State;
+    TransferSize:   LongWord;
+    TransferBuffer: Array[0..199] of Byte;
+  end;
+  PSHA3Context_Internal = ^TSHA3Context_Internal;
+
 //==============================================================================    
+
+{$IFDEF FPC}{$ASMMODE intel}{$ENDIF}
 
 {$If Defined(PurePascal) or not Defined(x64)}
   {$DEFINE no32ASM}
@@ -136,7 +185,7 @@ var
     If Idx > 4 then
       while Idx > 4 do Dec(Idx,5)
     else If Idx < 0 then
-      while idx < 0 do Inc(Idx,5);
+      while Idx < 0 do Inc(Idx,5);
     Result := Idx;
   end;
 
@@ -402,7 +451,7 @@ var
 begin
 FullBlocks := Size div State.BlockSize;
 If FullBlocks > 0 then BufferSHA3(State,Buffer,FullBlocks * State.BlockSize);
-LastBlockSize := Size - TSize(FullBlocks * State.BlockSize);
+LastBlockSize := Size - (Int64(FullBlocks) * State.BlockSize);
 HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
 HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
 try
@@ -542,6 +591,81 @@ try
 finally
   FileStream.Free;
 end;
+end;
+
+//==============================================================================
+
+Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3Context;
+begin
+Result := AllocMem(SizeOf(TSHA3Context_Internal));
+with PSHA3Context_Internal(Result)^ do
+  begin
+    HashState := InitialSHA3State(HashSize,HashBits);
+    TransferSize := 0;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TSize);
+var
+  FullBlocks:     LongWord;
+  RemainingSize:  TSize;
+begin
+with PSHA3Context_Internal(Context)^ do
+  begin
+    If TransferSize > 0 then
+      begin
+        If Size >= (HashState.BlockSize - TransferSize) then
+          begin
+            Move(Buffer,TransferBuffer[TransferSize],HashState.BlockSize - TransferSize);
+            BufferSHA3(HashState,TransferBuffer,HashState.BlockSize);
+            RemainingSize := Size - (HashState.BlockSize - TransferSize);
+            TransferSize := 0;
+            SHA3_Update(Context,TByteArray(Buffer)[Size - RemainingSize],RemainingSize);
+          end
+        else
+          begin
+            Move(Buffer,TransferBuffer[TransferSize],Size);
+            Inc(TransferSize,Size);
+          end;  
+      end
+    else
+      begin
+        FullBlocks := Size div HashState.BlockSize;
+        BufferSHA3(HashState,Buffer,FullBlocks * HashState.BlockSize);
+        If TSize(FullBlocks * HashState.BlockSize) < Size then
+          begin
+            TransferSize := Size - (Int64(FullBlocks) * HashState.BlockSize);
+            Move(TByteArray(Buffer)[Size - TransferSize],TransferBuffer,TransferSize);
+          end;
+      end;
+  end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TSize): TSHA3Hash;
+begin
+SHA3_Update(Context,Buffer,Size);
+Result := SHA3_Final(Context);
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3_Final(var Context: TSHA3Context): TSHA3Hash;
+begin
+with PSHA3Context_Internal(Context)^ do
+  Result := LastBufferSHA3(HashState,TransferBuffer,TransferSize);
+FreeMem(Context,SizeOf(TSHA3Context_Internal));
+Context := nil;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash;
+begin
+Result := LastBufferSHA3(InitialSHA3State(HashSize,HashBits),Buffer,Size);
 end;
 
 end.
