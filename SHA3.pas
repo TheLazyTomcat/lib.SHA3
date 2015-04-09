@@ -155,20 +155,54 @@ type
 
 {$IFDEF FPC}{$ASMMODE intel}{$ENDIF}
 
-{$If Defined(PurePascal) or not Defined(x64)}
-  {$DEFINE no32ASM}
-{$IFEND}
-
-Function ROL(Value: Int64; Shift: Integer): Int64;{$IFNDEF no32ASM}assembler;{$ENDIF}
-{$IFDEF no32ASM}
+Function ROL(Value: Int64; Shift: Integer): Int64;{$IFNDEF PurePascal}assembler;{$ENDIF}
+{$IFDEF PurePascal}
 begin
-  Result := (Value shl Shift) or (Value shr (64 - Shift));
+Shift := Shift and $3F;
+Result := (Value shl Shift) or (Value shr (64 - Shift));
 end;
 {$ELSE}
 asm
-  MOV RAX, RCX
-  MOV CL,  DL
-  ROL RAX, CL
+{$IFDEF x64}
+    MOV   RAX,  RCX
+    MOV   CL,   DL
+    ROL   RAX,  CL
+{$ELSE}
+    MOV   ECX,  EAX
+    AND   ECX,  $3F
+    CMP   ECX,  32
+
+    JAE   @Above31
+
+  @Below32:
+    MOV   EAX,  dword ptr [Value]
+    MOV   EDX,  dword ptr [Value + 4]
+    CMP   ECX,  0
+    JE    @FuncEnd
+
+    MOV   dword ptr [Value],  EDX
+    JMP   @Rotate
+
+  @Above31:
+    MOV   EDX,  dword ptr [Value]
+    MOV   EAX,  dword ptr [Value + 4]
+    JE    @FuncEnd
+
+    AND   ECX,  $1F
+
+  @Rotate:
+    SHLD  EDX,  EAX, CL
+    SHL   EAX,  CL
+    PUSH  EAX
+    MOV   EAX,  dword ptr [Value]
+    XOR   CL,   31
+    INC   CL
+    SHR   EAX,  CL
+    POP   ECX
+    OR    EAX,  ECX
+
+  @FuncEnd:
+{$ENDIF}
 end;
 {$ENDIF}
 
