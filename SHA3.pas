@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2015-03-23
+  ©František Milt 2015-05-08
 
-  Version 1.0
+  Version 1.0.1
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -39,10 +39,13 @@ uses
 
 type
 {$IFDEF x64}
-  TSize = UInt64;
+  PtrUInt = UInt64;
 {$ELSE}
-  TSize = LongWord;
+  PtrUInt = LongWord;
 {$ENDIF}
+
+  TSize = PtrUInt;
+
 
   TKeccakHashSize = (Keccak224,Keccak256,Keccak384,Keccak512,Keccak_b,
                      SHA3_224,SHA3_256,SHA3_384,SHA3_512,SHAKE128,SHAKE256);
@@ -155,7 +158,7 @@ type
 
 {$IFDEF FPC}{$ASMMODE intel}{$ENDIF}
 
-Function ROL(Value: Int64; Shift: Integer): Int64;{$IFNDEF PurePascal}assembler;{$ENDIF}
+Function ROL(Value: Int64; Shift: Byte): Int64;{$IFNDEF PurePascal}assembler;{$ENDIF}
 {$IFDEF PurePascal}
 begin
 Shift := Shift and $3F;
@@ -216,10 +219,8 @@ var
 
   Function WrapIndex(Idx: Integer): Integer;
   begin
-    If Idx > 4 then
-      while Idx > 4 do Dec(Idx,5)
-    else If Idx < 0 then
-      while Idx < 0 do Inc(Idx,5);
+    while Idx > 4 do Dec(Idx,5);
+    while Idx < 0 do Inc(Idx,5);
     Result := Idx;
   end;
 
@@ -250,13 +251,16 @@ end;
 //------------------------------------------------------------------------------
 
 procedure BlockHash(var State: TKeccakState; const Block);
-type
-  TIn64Array = Array[0..0] of Int64;
 var
-  i:  Integer;
+  i:    Integer;
+  Buff: PInt64;
 begin
+Buff := @Block;
 For i := 0 to Pred(State.BlockSize shr 3) do
-  State.Sponge[i div 5,i mod 5] := State.Sponge[i div 5,i mod 5] xor TIn64Array(Block)[i];
+  begin
+    State.Sponge[i div 5,i mod 5] := State.Sponge[i div 5,i mod 5] xor Buff^;
+    Inc(Buff);
+  end;
 Permute(State);
 end;
 
@@ -264,13 +268,17 @@ end;
 
 procedure Squeeze(var State: TKeccakState; var Buffer);
 var
-  BytesToSqueeze:  Int64;
+  BytesToSqueeze: LongWord;
 begin
 BytesToSqueeze := State.HashBits shr 3;
 If BytesToSqueeze > State.BlockSize then
   while BytesToSqueeze > 0 do
     begin
-      Move(State.Sponge,TByteArray(Buffer)[(State.HashBits shr 3) - BytesToSqueeze],Min(BytesToSqueeze,State.BlockSize));
+      {$IFDEF x64}
+      Move(State.Sponge,{%H-}Pointer(PtrUInt(@Buffer) + (State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
+      {$ELSE}
+      Move(State.Sponge,{%H-}Pointer(PtrUInt(@Buffer) + Int64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
+      {$ENDIF}
       Permute(State);
       Dec(BytesToSqueeze,Min(BytesToSqueeze,State.BlockSize));
     end
@@ -337,11 +345,16 @@ case HashSize of
   Keccak256, SHA3_256:  Result.HashBits := 256;
   Keccak384, SHA3_384:  Result.HashBits := 384;
   Keccak512, SHA3_512:  Result.HashBits := 512;
+  Keccak_b,
+  SHAKE128,
+  SHAKE256: begin
+              If (HashBits and $7) <> 0 then
+                raise Exception.Create('InitialSHA3State: HashBits must be divisible by 8.')
+              else
+                Result.HashBits := HashBits;
+            end;
 else
-  If (HashBits and $7) <> 0 then
-    raise Exception.Create('InitialSHA3State: HashBits must be divisible by 8.')
-  else
-    Result.HashBits := HashBits;
+  raise Exception.CreateFmt('InitialSHA3State: Unknown hash size (%d).',[Integer(HashSize)]);
 end;
 Result.BlockSize := GetBlockSize(HashSize);
 FillChar(Result.Sponge,SizeOf(Result.Sponge),0);
@@ -375,14 +388,20 @@ end;
 
 Function SHA3ToStr(Hash: TSHA3Hash): String;
 var
-  i:  Integer;
+  i:    LongWord;
+  Buff: PByte;
 begin
 RectifyHashPointer(Hash);
 SetLength(Result,(Hash.HashBits shr 3) * 2);
-For i := 0 to Pred(Hash.HashBits shr 3) do
+If (Hash.HashBits shr 3) > 0 then
   begin
-    Result[(i * 2) + 1] := IntToHex(TByteArray(Hash.HashPtr^)[i],2)[1];
-    Result[(i * 2) + 2] := IntToHex(TByteArray(Hash.HashPtr^)[i],2)[2];
+    Buff := Hash.HashPtr;
+    For i := 0 to Pred(Hash.HashBits shr 3) do
+      begin
+        Result[(i * 2) + 1] := IntToHex(Buff^,2)[1];
+        Result[(i * 2) + 2] := IntToHex(Buff^,2)[2];
+        Inc(Buff);
+      end;
   end;
 end;
 
@@ -392,6 +411,7 @@ Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
 var
   HashCharacters: Integer;
   i:              Integer;
+  Buff:           PByte;
 begin
 case HashSize of
   Keccak224, SHA3_224:  Result.HashBits := 224;
@@ -415,8 +435,12 @@ If Length(Str) < HashCharacters then
 else
   If Length(Str) > HashCharacters then
     Str := Copy(Str,Length(Str) - HashCharacters + 1,HashCharacters);
+Buff := Result.HashPtr;
 For i := 0 to Pred(Result.HashBits shr 3) do
-  TByteArray(Result.HashPtr^)[i] := StrToInt('$' + Copy(Str,(i * 2) + 1,2));
+  begin
+    Buff^ := StrToInt('$' + Copy(Str,(i * 2) + 1,2));
+    Inc(Buff);
+  end;
 end;
 
 //------------------------------------------------------------------------------
@@ -443,19 +467,26 @@ end;
 
 Function SameSHA3(A,B: TSHA3Hash): Boolean;
 var
-  i:  Integer;
+  i:      Integer;
+  B1,B2:  PByte;
 begin
 RectifyHashPointer(A);
 RectifyHashPointer(B);
 If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) then
   begin
     Result := True;
+    B1 := A.HashPtr;
+    B2 := B.HashPtr;
     For i := 0 to Pred(A.HashBits shr 3) do
-      If TByteArray(A.HashPtr^)[i] <> TByteArray(B.HashPtr^)[i] then
-        begin
-          Result := False;
-          Break;
-        end;
+      begin
+        If B1^ <> B2^ then
+          begin
+            Result := False;
+            Break;
+          end;
+        Inc(B1);
+        Inc(B2);
+      end;
   end
 else Result := False;
 end;
@@ -464,40 +495,56 @@ end;
 
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TSize);
 var
-  i:  Integer;
+  i:    TSize;
+  Buff: PByte;
 begin
-If (Size mod State.BlockSize) = 0 then
+If Size > 0 then
   begin
-    For i := 0 to Pred(Size div State.BlockSize) do
-      BlockHash(State,TByteArray(Buffer)[TSize(i) * State.BlockSize]);
-  end
-else raise Exception.CreateFmt('BufferSHA3: Buffer size is not divisible by %d.',[State.BlockSize]);
+    If (Size mod State.BlockSize) = 0 then
+      begin
+        Buff := @Buffer;
+        For i := 0 to Pred(Size div State.BlockSize) do
+          begin
+            BlockHash(State,Buff^);
+            Inc(Buff,State.BlockSize);
+          end;
+      end
+    else raise Exception.CreateFmt('BufferSHA3: Buffer size is not divisible by %d.',[State.BlockSize]);
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
 Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TSize): TSHA3Hash;
 var
-  FullBlocks:     LongWord;
-  LastBlockSize:  LongWord;
-  HelpBlocks:     LongWord;
+  FullBlocks:     TSize;
+  LastBlockSize:  TSize;
+  HelpBlocks:     TSize;
   HelpBlocksBuff: Pointer;
 begin
 FullBlocks := Size div State.BlockSize;
 If FullBlocks > 0 then BufferSHA3(State,Buffer,FullBlocks * State.BlockSize);
+{$IFDEF x64}
+LastBlockSize := Size - (FullBlocks * State.BlockSize);
+{$ELSE}
 LastBlockSize := Size - (Int64(FullBlocks) * State.BlockSize);
+{$ENDIF}
 HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
 HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
 try
-  Move(TByteArray(Buffer)[FullBlocks * State.BlockSize],HelpBlocksBuff^,LastBlockSize);
+  Move({%H-}Pointer(PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
   case State.HashSize of
-    Keccak224..Keccak_b:  TByteArray(HelpBlocksBuff^)[LastBlockSize] := $01;
-     SHA3_224..SHA3_512:  TByteArray(HelpBlocksBuff^)[LastBlockSize] := $06;
-     SHAKE128..SHAKE256:  TByteArray(HelpBlocksBuff^)[LastBlockSize] := $1F;
+    Keccak224..Keccak_b:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
+     SHA3_224..SHA3_512:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
+     SHAKE128..SHAKE256:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
   else
     raise Exception.CreateFmt('LastBufferSHA3: Unknown hash size (%d)',[Integer(State.HashSize)]);
   end;
-  TByteArray(HelpBlocksBuff^)[Pred(HelpBlocks * State.BlockSize)] := TByteArray(HelpBlocksBuff^)[Pred(HelpBlocks * State.BlockSize)] xor $80;
+  {$IFDEF x64}
+  {%H-}PByte(PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ := PByte(PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ xor $80;
+  {$ELSE}
+  {%H-}PByte(PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ := PByte(PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
+  {$ENDIF}
   BufferSHA3(State,HelpBlocksBuff^,HelpBlocks * State.BlockSize);
 finally
   FreeMem(HelpBlocksBuff,HelpBlocks * State.BlockSize);
@@ -578,7 +625,7 @@ end;
 Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: LongWord = 0): TSHA3Hash;
 var
   Buffer:     Pointer;
-  BytesRead:  TSize;
+  BytesRead:  LongWord;
   State:      TSHA3State;
   BufferSize: LongWord;
 begin
@@ -643,7 +690,7 @@ end;
 
 procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TSize);
 var
-  FullBlocks:     LongWord;
+  FullBlocks:     TSize;
   RemainingSize:  TSize;
 begin
 with PSHA3Context_Internal(Context)^ do
@@ -656,7 +703,7 @@ with PSHA3Context_Internal(Context)^ do
             BufferSHA3(HashState,TransferBuffer,HashState.BlockSize);
             RemainingSize := Size - (HashState.BlockSize - TransferSize);
             TransferSize := 0;
-            SHA3_Update(Context,TByteArray(Buffer)[Size - RemainingSize],RemainingSize);
+            SHA3_Update(Context,{%H-}Pointer(PtrUInt(@Buffer) + (Size - RemainingSize))^,RemainingSize);
           end
         else
           begin
@@ -668,10 +715,14 @@ with PSHA3Context_Internal(Context)^ do
       begin
         FullBlocks := Size div HashState.BlockSize;
         BufferSHA3(HashState,Buffer,FullBlocks * HashState.BlockSize);
-        If TSize(FullBlocks * HashState.BlockSize) < Size then
+        If (FullBlocks * HashState.BlockSize) < Size then
           begin
+            {$IFDEF x64}
+            TransferSize := Size - (FullBlocks * HashState.BlockSize);
+            {$ELSE}
             TransferSize := Size - (Int64(FullBlocks) * HashState.BlockSize);
-            Move(TByteArray(Buffer)[Size - TransferSize],TransferBuffer,TransferSize);
+            {$ENDIF}
+            Move({%H-}Pointer(PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
           end;
       end;
   end;
