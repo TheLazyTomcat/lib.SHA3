@@ -275,9 +275,9 @@ If BytesToSqueeze > State.BlockSize then
   while BytesToSqueeze > 0 do
     begin
       {$IFDEF x64}
-      Move(State.Sponge,{%H-}Pointer(PtrUInt(@Buffer) + (State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
+      Move(State.Sponge,{%H-}Pointer({%H-}PtrUInt(@Buffer) + (State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
       {$ELSE}
-      Move(State.Sponge,{%H-}Pointer(PtrUInt(@Buffer) + Int64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
+      Move(State.Sponge,{%H-}Pointer({%H-}PtrUInt(@Buffer) + Int64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
       {$ENDIF}
       Permute(State);
       Dec(BytesToSqueeze,Min(BytesToSqueeze,State.BlockSize));
@@ -532,18 +532,18 @@ LastBlockSize := Size - (Int64(FullBlocks) * State.BlockSize);
 HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
 HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
 try
-  Move({%H-}Pointer(PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
+  Move({%H-}Pointer({%H-}PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
   case State.HashSize of
-    Keccak224..Keccak_b:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
-     SHA3_224..SHA3_512:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
-     SHAKE128..SHAKE256:  {%H-}PByte(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
+    Keccak224..Keccak_b:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
+     SHA3_224..SHA3_512:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
+     SHAKE128..SHAKE256:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
   else
     raise Exception.CreateFmt('LastBufferSHA3: Unknown hash size (%d)',[Integer(State.HashSize)]);
   end;
   {$IFDEF x64}
-  {%H-}PByte(PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ := PByte(PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ xor $80;
+  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ := {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ xor $80;
   {$ELSE}
-  {%H-}PByte(PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ := PByte(PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
+  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ := {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
   {$ENDIF}
   BufferSHA3(State,HelpBlocksBuff^,HelpBlocks * State.BlockSize);
 finally
@@ -703,7 +703,7 @@ with PSHA3Context_Internal(Context)^ do
             BufferSHA3(HashState,TransferBuffer,HashState.BlockSize);
             RemainingSize := Size - (HashState.BlockSize - TransferSize);
             TransferSize := 0;
-            SHA3_Update(Context,{%H-}Pointer(PtrUInt(@Buffer) + (Size - RemainingSize))^,RemainingSize);
+            SHA3_Update(Context,{%H-}Pointer({%H-}PtrUInt(@Buffer) + (Size - RemainingSize))^,RemainingSize);
           end
         else
           begin
@@ -722,7 +722,7 @@ with PSHA3Context_Internal(Context)^ do
             {$ELSE}
             TransferSize := Size - (Int64(FullBlocks) * HashState.BlockSize);
             {$ENDIF}
-            Move({%H-}Pointer(PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
+            Move({%H-}Pointer({%H-}PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
           end;
       end;
   end;
