@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2015-05-08
+  ©František Milt 2015-06-04
 
-  Version 1.0.1
+  Version 1.1
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -63,28 +63,10 @@ type
 
   TSHA3State = TKeccakState;
 
-  TKeccakHash_224 = Array[0..27] of Byte;
-  TKeccakHash_256 = Array[0..31] of Byte;
-  TKeccakHash_384 = Array[0..47] of Byte;
-  TKeccakHash_512 = Array[0..63] of Byte;
-
-  TSHA3Hash_224 = TKeccakHash_224;
-  TSHA3Hash_256 = TKeccakHash_256;
-  TSHA3Hash_384 = TKeccakHash_384;
-  TSHA3Hash_512 = TKeccakHash_512;
-
   TKeccakHash = record
-    HashPtr:  Pointer;
+    HashSize: TKeccakHashSize;
     HashBits: LongWord;
-    case HashSize: TKeccakHashSize of
-      Keccak224:  (KeccakHash_224:  TKeccakHash_224);
-      Keccak256:  (KeccakHash_256:  TKeccakHash_256);
-      Keccak384:  (KeccakHash_384:  TKeccakHash_384);
-      Keccak512:  (KeccakHash_512:  TKeccakHash_512);
-      SHA3_224:   (SHA3Hash_224:    TSHA3Hash_224);
-      SHA3_256:   (SHA3Hash_256:    TSHA3Hash_256);
-      SHA3_384:   (SHA3Hash_384:    TSHA3Hash_384);
-      SHA3_512:   (SHA3Hash_512:    TSHA3Hash_512);
+    HashData: Array of Byte;
   end;
 
   TSHA3Hash = TKeccakHash;
@@ -92,8 +74,6 @@ type
 Function GetBlockSize(HashSize: TSHA3HashSize): LongWord;
 
 Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3State;
-procedure CopySHA3Hash(Source: TSHA3Hash; var Destination: TSHA3Hash);
-procedure FinalizeSHA3Hash(var Hash: TSHA3Hash);
 
 Function SHA3ToStr(Hash: TSHA3Hash): String;
 Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
@@ -287,35 +267,11 @@ end;
 
 //==============================================================================
 
-procedure RectifyHashPointer(var Hash: TSHA3Hash);
-begin
-case Hash.HashSize of
-  Keccak224:  Hash.HashPtr := Addr(Hash.KeccakHash_224);
-  Keccak256:  Hash.HashPtr := Addr(Hash.KeccakHash_256);
-  Keccak384:  Hash.HashPtr := Addr(Hash.KeccakHash_384);
-  Keccak512:  Hash.HashPtr := Addr(Hash.KeccakHash_512);
-  SHA3_224:   Hash.HashPtr := Addr(Hash.SHA3Hash_224);
-  SHA3_256:   Hash.HashPtr := Addr(Hash.SHA3Hash_256);
-  SHA3_384:   Hash.HashPtr := Addr(Hash.SHA3Hash_384);
-  SHA3_512:   Hash.HashPtr := Addr(Hash.SHA3Hash_512);
-  Keccak_b,
-  SHAKE128,
-  SHAKE256:;  // Do nothing.
-else
-  raise Exception.CreateFmt('RectifyHashPointer: Unknown hash size (%d)',[Integer(Hash.HashSize)]);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
 procedure PrepareHash(State: TSHA3State; out Hash: TSHA3Hash);
 begin
-Hash.HashBits := State.HashBits;
 Hash.HashSize := State.HashSize;
-If Hash.HashSize in [Keccak_b,SHAKE128,SHAKE256] then
-  Hash.HashPtr := AllocMem(Hash.HashBits shr 3)
-else
-  RectifyHashPointer(Hash);
+Hash.HashBits := State.HashBits;
+SetLength(Hash.HashData,Hash.HashBits shr 3);
 end;
 
 //==============================================================================
@@ -360,48 +316,17 @@ Result.BlockSize := GetBlockSize(HashSize);
 FillChar(Result.Sponge,SizeOf(Result.Sponge),0);
 end;
 
-//------------------------------------------------------------------------------
-
-procedure CopySHA3Hash(Source: TSHA3Hash; var Destination: TSHA3Hash);
-begin
-Destination := Source;
-If Source.HashSize in [Keccak_b,SHAKE128,SHAKE256] then
-  begin
-    Destination.HashPtr := AllocMem(Destination.HashBits shr 3);
-    Move(Source.HashPtr^,Destination.HashPtr^,Destination.HashBits shr 3);
-  end
-else RectifyHashPointer(Destination);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure FinalizeSHA3Hash(var Hash: TSHA3Hash);
-begin
-If Hash.HashSize in [Keccak_b,SHAKE128,SHAKE256] then
-  begin
-    FreeMem(Hash.HashPtr,Hash.HashBits shr 3);
-    Hash.HashPtr := nil;
-  end;
-end;
-
 //==============================================================================
 
 Function SHA3ToStr(Hash: TSHA3Hash): String;
 var
-  i:    LongWord;
-  Buff: PByte;
+  i:  Integer;
 begin
-RectifyHashPointer(Hash);
-SetLength(Result,(Hash.HashBits shr 3) * 2);
-If (Hash.HashBits shr 3) > 0 then
+SetLength(Result,Length(Hash.HashData) * 2);
+For i := Low(Hash.HashData) to High(Hash.HashData) do
   begin
-    Buff := Hash.HashPtr;
-    For i := 0 to Pred(Hash.HashBits shr 3) do
-      begin
-        Result[(i * 2) + 1] := IntToHex(Buff^,2)[1];
-        Result[(i * 2) + 2] := IntToHex(Buff^,2)[2];
-        Inc(Buff);
-      end;
+    Result[(i * 2) + 1] := IntToHex(Hash.HashData[i],2)[1];
+    Result[(i * 2) + 2] := IntToHex(Hash.HashData[i],2)[2];
   end;
 end;
 
@@ -411,8 +336,8 @@ Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
 var
   HashCharacters: Integer;
   i:              Integer;
-  Buff:           PByte;
 begin
+Result.HashSize := HashSize;
 case HashSize of
   Keccak224, SHA3_224:  Result.HashBits := 224;
   Keccak256, SHA3_256:  Result.HashBits := 256;
@@ -420,27 +345,19 @@ case HashSize of
   Keccak512, SHA3_512:  Result.HashBits := 512;
   Keccak_b,
   SHAKE128,
-  SHAKE256: begin
-              Result.HashPtr := AllocMem(Length(Str) shr 1);
-              Result.HashBits := (Length(Str) shr 1) shl 3;
-            end;
+  SHAKE256:  Result.HashBits := (Length(Str) shr 1) shl 3;
 else
   raise Exception.CreateFmt('StrToSHA3: Unknown source hash size (%d).',[Integer(HashSize)]);
 end;
-Result.HashSize := HashSize;
-RectifyHashPointer(Result);
 HashCharacters := Result.HashBits shr 2;
 If Length(Str) < HashCharacters then
   Str := StringOfChar('0',HashCharacters - Length(Str)) + Str
 else
   If Length(Str) > HashCharacters then
     Str := Copy(Str,Length(Str) - HashCharacters + 1,HashCharacters);
-Buff := Result.HashPtr;
-For i := 0 to Pred(Result.HashBits shr 3) do
-  begin
-    Buff^ := StrToInt('$' + Copy(Str,(i * 2) + 1,2));
-    Inc(Buff);
-  end;
+SetLength(Result.HashData,Length(Str) shr 1);    
+For i := Low(Result.HashData) to High(Result.HashData) do
+  Result.HashData[i] := StrToInt('$' + Copy(Str,(i * 2) + 1,2));
 end;
 
 //------------------------------------------------------------------------------
@@ -460,35 +377,23 @@ end;
 Function StrToSHA3Def(HashSize: TSHA3HashSize; const Str: String; Default: TSHA3Hash): TSHA3Hash;
 begin
 If not TryStrToSHA3(HashSize,Str,Result) then
-  CopySHA3Hash(Default,Result);
+  Result := Default;
 end;
 
 //------------------------------------------------------------------------------
 
 Function SameSHA3(A,B: TSHA3Hash): Boolean;
 var
-  i:      Integer;
-  B1,B2:  PByte;
+  i:  Integer;
 begin
-RectifyHashPointer(A);
-RectifyHashPointer(B);
-If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) then
+Result := False;
+If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) and
+  (Length(A.HashData) = Length(B.HashData)) then
   begin
+    For i := Low(A.HashData) to High(A.HashData) do
+      If A.HashData[i] <> B.HashData[i] then Exit;
     Result := True;
-    B1 := A.HashPtr;
-    B2 := B.HashPtr;
-    For i := 0 to Pred(A.HashBits shr 3) do
-      begin
-        If B1^ <> B2^ then
-          begin
-            Result := False;
-            Break;
-          end;
-        Inc(B1);
-        Inc(B2);
-      end;
-  end
-else Result := False;
+  end;
 end;
 
 //==============================================================================
@@ -550,7 +455,8 @@ finally
   FreeMem(HelpBlocksBuff,HelpBlocks * State.BlockSize);
 end;
 PrepareHash(State,Result);
-Squeeze(State,Result.HashPtr^);
+If Length(Result.HashData) > 0 then
+  Squeeze(State,Addr(Result.HashData[0])^);
 end;
 
 //==============================================================================
@@ -660,6 +566,7 @@ If Assigned(Stream) then
   end
 else raise Exception.Create('StreamSHA3: Stream is not assigned.');
 end;
+
 //------------------------------------------------------------------------------
 
 Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: LongWord = 0): TSHA3Hash;
