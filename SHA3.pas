@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2015-06-04
+  ©František Milt 2015-12-15
 
-  Version 1.1
+  Version 1.1.1
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -32,32 +32,41 @@ unit SHA3;
 interface
 
 {$DEFINE LargeBuffer}
-{.$DEFINE UseStringStream}
 
-uses
-  Classes;
-
-type
-{$IFDEF x64}
-  PtrUInt = UInt64;
+{$IF defined(CPUX86_64) or defined(CPUX64)}
+  {$DEFINE x64}
+  {$IF not(defined(WINDOWS) or defined(MSWINDOWS))}
+    {$DEFINE PurePascal}
+  {$IFEND}
+{$ELSEIF defined(CPU386)}
+  {$DEFINE x86}
 {$ELSE}
-  PtrUInt = LongWord;
+  {$DEFINE PurePascal}
+{$IFEND}
+
+{$IF defined(FPC) and not defined(PurePascal)}
+  {$ASMMODE Intel}
+{$IFEND}
+
+{$IFDEF ENDIAN_BIG}
+  {$MESSAGE FATAL 'Big-endian system not supported'}
 {$ENDIF}
 
-  TSize = PtrUInt;
+uses
+  Classes, AuxTypes;
 
-
+type
   TKeccakHashSize = (Keccak224,Keccak256,Keccak384,Keccak512,Keccak_b,
                      SHA3_224,SHA3_256,SHA3_384,SHA3_512,SHAKE128,SHAKE256);
                      
   TSHA3HashSize = TKeccakHashSize;
 
-  TKeccakSponge = Array[0..4,0..4] of Int64;  // First index is Y, second X
+  TKeccakSponge = array[0..4,0..4] of UInt64;  // First index is Y, second X
 
   TKeccakState = record
     HashSize:   TKeccakHashSize;
-    HashBits:   LongWord;
-    BlockSize:  LongWord;
+    HashBits:   UInt32;
+    BlockSize:  UInt32;
     Sponge:     TKeccakSponge;
   end;
 
@@ -65,15 +74,15 @@ type
 
   TKeccakHash = record
     HashSize: TKeccakHashSize;
-    HashBits: LongWord;
-    HashData: Array of Byte;
+    HashBits: UInt32;
+    HashData: array of UInt8;
   end;
 
   TSHA3Hash = TKeccakHash;
 
-Function GetBlockSize(HashSize: TSHA3HashSize): LongWord;
+Function GetBlockSize(HashSize: TSHA3HashSize): UInt32;
 
-Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3State;
+Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3State;
 
 Function SHA3ToStr(Hash: TSHA3Hash): String;
 Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
@@ -81,28 +90,28 @@ Function TryStrToSHA3(HashSize: TSHA3HashSize;const Str: String; out Hash: TSHA3
 Function StrToSHA3Def(HashSize: TSHA3HashSize;const Str: String; Default: TSHA3Hash): TSHA3Hash;
 Function SameSHA3(A,B: TSHA3Hash): Boolean;
 
-procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TSize); overload;
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TSize): TSHA3Hash;
+procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize); overload;
+Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
 
-Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash; overload;
+Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash; overload;
 
-Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: LongWord = 0): TSHA3Hash;
-Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: LongWord = 0): TSHA3Hash;
-Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: LongWord = 0): TSHA3Hash;
+Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;
+Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;
+Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;
 
-Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: LongWord = 0): TSHA3Hash;
-Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: LongWord = 0): TSHA3Hash;
+Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3Hash;
+Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UInt32 = 0): TSHA3Hash;
 
 //------------------------------------------------------------------------------
 
 type
   TSHA3Context = type Pointer;
 
-Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3Context;
-procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TSize);
-Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TSize): TSHA3Hash; overload;
+Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3Context;
+procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TMemSize);
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3Hash; overload;
 Function SHA3_Final(var Context: TSHA3Context): TSHA3Hash; overload;
-Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash;
+Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
 
 
 implementation
@@ -111,15 +120,17 @@ uses
   SysUtils, Math;
 
 const
-  RoundConsts: Array[0..23] of Int64 = (
-    $0000000000000001, $0000000000008082, $800000000000808A, $8000000080008000,
-    $000000000000808B, $0000000080000001, $8000000080008081, $8000000000008009,
-    $000000000000008A, $0000000000000088, $0000000080008009, $000000008000000A,
-    $000000008000808B, $800000000000008B, $8000000000008089, $8000000000008003,
-    $8000000000008002, $8000000000000080, $000000000000800A, $800000008000000A,
-    $8000000080008081, $8000000000008080, $0000000080000001, $8000000080008008);
+  RoundConsts: array[0..23] of UInt64 = (
+    UInt64($0000000000000001), UInt64($0000000000008082), UInt64($800000000000808A),
+    UInt64($8000000080008000), UInt64($000000000000808B), UInt64($0000000080000001),
+    UInt64($8000000080008081), UInt64($8000000000008009), UInt64($000000000000008A),
+    UInt64($0000000000000088), UInt64($0000000080008009), UInt64($000000008000000A),
+    UInt64($000000008000808B), UInt64($800000000000008B), UInt64($8000000000008089),
+    UInt64($8000000000008003), UInt64($8000000000008002), UInt64($8000000000000080),
+    UInt64($000000000000800A), UInt64($800000008000000A), UInt64($8000000080008081),
+    UInt64($8000000000008080), UInt64($0000000080000001), UInt64($8000000080008008));
 
-  RotateCoefs: Array[0..4,0..4] of Byte = ( // first index is X, second Y
+  RotateCoefs: array[0..4,0..4] of UInt8 = ( // first index is X, second Y
     {X = 0} ( 0,36, 3,41,18),
     {X = 1} ( 1,44,10,45, 2),
     {X = 2} (62, 6,43,15,61),
@@ -129,22 +140,14 @@ const
 type
   TSHA3Context_Internal = record
     HashState:      TSHA3State;
-    TransferSize:   LongWord;
-    TransferBuffer: Array[0..199] of Byte;
+    TransferSize:   UInt32;
+    TransferBuffer: array[0..199] of UInt8;
   end;
   PSHA3Context_Internal = ^TSHA3Context_Internal;
 
 //==============================================================================    
 
-{$IFDEF FPC}{$ASMMODE intel}{$ENDIF}
-
-Function ROL(Value: Int64; Shift: Byte): Int64;{$IFNDEF PurePascal}assembler;{$ENDIF}
-{$IFDEF PurePascal}
-begin
-Shift := Shift and $3F;
-Result := (Value shl Shift) or (Value shr (64 - Shift));
-end;
-{$ELSE}
+Function ROL(Value: UInt64; Shift: Byte): UInt64; register; {$IFNDEF PurePascal}assembler;
 asm
 {$IFDEF x64}
     MOV   RAX,  RCX
@@ -187,6 +190,11 @@ asm
   @FuncEnd:
 {$ENDIF}
 end;
+{$ELSE}
+begin
+Shift := Shift and $3F;
+Result := UInt64((Value shl Shift) or (Value shr (64 - Shift)));
+end;
 {$ENDIF}
 
 //==============================================================================
@@ -195,7 +203,7 @@ procedure Permute(var State: TKeccakState);
 var
   i,x,y:  Integer;
   B:      TKeccakSponge;
-  C,D:    Array[0..4] of Int64;
+  C,D:    array[0..4] of UInt64;
 
   Function WrapIndex(Idx: Integer): Integer;
   begin
@@ -233,7 +241,7 @@ end;
 procedure BlockHash(var State: TKeccakState; const Block);
 var
   i:    Integer;
-  Buff: PInt64;
+  Buff: PUInt64;
 begin
 Buff := @Block;
 For i := 0 to Pred(State.BlockSize shr 3) do
@@ -248,17 +256,13 @@ end;
 
 procedure Squeeze(var State: TKeccakState; var Buffer);
 var
-  BytesToSqueeze: LongWord;
+  BytesToSqueeze: UInt32;
 begin
 BytesToSqueeze := State.HashBits shr 3;
 If BytesToSqueeze > State.BlockSize then
   while BytesToSqueeze > 0 do
     begin
-      {$IFDEF x64}
-      Move(State.Sponge,{%H-}Pointer({%H-}PtrUInt(@Buffer) + (State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
-      {$ELSE}
-      Move(State.Sponge,{%H-}Pointer({%H-}PtrUInt(@Buffer) + Int64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
-      {$ENDIF}
+      Move(State.Sponge,{%H-}Pointer({%H-}PtrUInt(@Buffer) + UInt64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
       Permute(State);
       Dec(BytesToSqueeze,Min(BytesToSqueeze,State.BlockSize));
     end
@@ -276,7 +280,7 @@ end;
 
 //==============================================================================
 
-Function GetBlockSize(HashSize: TKeccakHashSize): LongWord;
+Function GetBlockSize(HashSize: TKeccakHashSize): UInt32;
 begin
 case HashSize of
   Keccak224, SHA3_224:  Result := (1600 - (2 * 224)) shr 3;
@@ -287,13 +291,13 @@ case HashSize of
   SHAKE128:             Result := (1600 - (2 * 128)) shr 3;
   SHAKE256:             Result := (1600 - (2 * 256)) shr 3;
 else
-  raise Exception.CreateFmt('GetBlockSize: Unknown hash size (%d).',[Integer(HashSize)]);
+  raise Exception.CreateFmt('GetBlockSize: Unknown hash size (%d).',[Ord(HashSize)]);
 end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3State;
+Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3State;
 begin
 Result.HashSize := HashSize;
 case HashSize of
@@ -310,7 +314,7 @@ case HashSize of
                 Result.HashBits := HashBits;
             end;
 else
-  raise Exception.CreateFmt('InitialSHA3State: Unknown hash size (%d).',[Integer(HashSize)]);
+  raise Exception.CreateFmt('InitialSHA3State: Unknown hash size (%d).',[Ord(HashSize)]);
 end;
 Result.BlockSize := GetBlockSize(HashSize);
 FillChar(Result.Sponge,SizeOf(Result.Sponge),0);
@@ -347,7 +351,7 @@ case HashSize of
   SHAKE128,
   SHAKE256:  Result.HashBits := (Length(Str) shr 1) shl 3;
 else
-  raise Exception.CreateFmt('StrToSHA3: Unknown source hash size (%d).',[Integer(HashSize)]);
+  raise Exception.CreateFmt('StrToSHA3: Unknown source hash size (%d).',[Ord(HashSize)]);
 end;
 HashCharacters := Result.HashBits shr 2;
 If Length(Str) < HashCharacters then
@@ -357,7 +361,7 @@ else
     Str := Copy(Str,Length(Str) - HashCharacters + 1,HashCharacters);
 SetLength(Result.HashData,Length(Str) shr 1);    
 For i := Low(Result.HashData) to High(Result.HashData) do
-  Result.HashData[i] := StrToInt('$' + Copy(Str,(i * 2) + 1,2));
+  Result.HashData[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
 end;
 
 //------------------------------------------------------------------------------
@@ -398,10 +402,10 @@ end;
 
 //==============================================================================
 
-procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TSize);
+procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize);
 var
-  i:    TSize;
-  Buff: PByte;
+  i:    TMemSize;
+  Buff: PUInt8;
 begin
 If Size > 0 then
   begin
@@ -420,36 +424,28 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TSize): TSHA3Hash;
+Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
 var
-  FullBlocks:     TSize;
-  LastBlockSize:  TSize;
-  HelpBlocks:     TSize;
+  FullBlocks:     TMemSize;
+  LastBlockSize:  TMemSize;
+  HelpBlocks:     TMemSize;
   HelpBlocksBuff: Pointer;
 begin
 FullBlocks := Size div State.BlockSize;
 If FullBlocks > 0 then BufferSHA3(State,Buffer,FullBlocks * State.BlockSize);
-{$IFDEF x64}
-LastBlockSize := Size - (FullBlocks * State.BlockSize);
-{$ELSE}
-LastBlockSize := Size - (Int64(FullBlocks) * State.BlockSize);
-{$ENDIF}
+LastBlockSize := Size - (UInt64(FullBlocks) * State.BlockSize);
 HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
 HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
 try
   Move({%H-}Pointer({%H-}PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
   case State.HashSize of
-    Keccak224..Keccak_b:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
-     SHA3_224..SHA3_512:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
-     SHAKE128..SHAKE256:  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
+    Keccak224..Keccak_b:  {%H-}PUInt8({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
+     SHA3_224..SHA3_512:  {%H-}PUInt8({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
+     SHAKE128..SHAKE256:  {%H-}PUInt8({%H-}PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
   else
-    raise Exception.CreateFmt('LastBufferSHA3: Unknown hash size (%d)',[Integer(State.HashSize)]);
+    raise Exception.CreateFmt('LastBufferSHA3: Unknown hash size (%d)',[Ord(State.HashSize)]);
   end;
-  {$IFDEF x64}
-  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ := {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (HelpBlocks * State.BlockSize) - 1)^ xor $80;
-  {$ELSE}
-  {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ := {%H-}PByte({%H-}PtrUInt(HelpBlocksBuff) + (Int64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
-  {$ENDIF}
+  {%H-}PUInt8({%H-}PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ := {%H-}PUInt8({%H-}PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
   BufferSHA3(State,HelpBlocksBuff^,HelpBlocks * State.BlockSize);
 finally
   FreeMem(HelpBlocksBuff,HelpBlocks * State.BlockSize);
@@ -461,79 +457,40 @@ end;
 
 //==============================================================================
 
-Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash;
+Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
 begin
 Result := LastBufferSHA3(InitialSHA3State(HashSize,HashBits),Buffer,Size);
 end;
 
 //==============================================================================
 
-Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: LongWord = 0): TSHA3Hash;
-{$IFDEF UseStringStream}
-var
-  StringStream: TStringStream;
-begin
-StringStream := TStringStream.Create(Str);
-try
-  Result := StreamSHA3(HashSize,StringStream,-1,HashBits);
-finally
-  StringStream.Free;
-end;
-end;
-{$ELSE}
+Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;
 begin
 Result := BufferSHA3(HashSize,PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),HashBits);
 end;
-{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: LongWord = 0): TSHA3Hash;
-{$IFDEF UseStringStream}
-var
-  StringStream: TStringStream;
-begin
-StringStream := TStringStream.Create(Str);
-try
-  Result := StreamSHA3(HashSize,StringStream,-1,HashBits);
-finally
-  StringStream.Free;
-end;
-end;
-{$ELSE}
+Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;
 begin
 Result := BufferSHA3(HashSize,PWideChar(Str)^,Length(Str) * SizeOf(WideChar),HashBits);
 end;
-{$ENDIF}
 
 //------------------------------------------------------------------------------
 
-Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: LongWord = 0): TSHA3Hash;
-{$IFDEF UseStringStream}
-var
-  StringStream: TStringStream;
-begin
-StringStream := TStringStream.Create(Str);
-try
-  Result := StreamSHA3(HashSize,StringStream,-1,HashBits);
-finally
-  StringStream.Free;
-end;
-end;
-{$ELSE}
+Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;
 begin
 Result := BufferSHA3(HashSize,PChar(Str)^,Length(Str) * SizeOf(Char),HashBits);
 end;
-{$ENDIF}
 
 //==============================================================================
 
-Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: LongWord = 0): TSHA3Hash;
+Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3Hash;
 var
   Buffer:     Pointer;
-  BytesRead:  LongWord;
+  BytesRead:  UInt32;
   State:      TSHA3State;
-  BufferSize: LongWord;
+  BufferSize: UInt32;
 begin
 If Assigned(Stream) then
   begin
@@ -569,7 +526,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: LongWord = 0): TSHA3Hash;
+Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UInt32 = 0): TSHA3Hash;
 var
   FileStream: TFileStream;
 begin
@@ -583,7 +540,7 @@ end;
 
 //==============================================================================
 
-Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: LongWord = 0): TSHA3Context;
+Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3Context;
 begin
 Result := AllocMem(SizeOf(TSHA3Context_Internal));
 with PSHA3Context_Internal(Result)^ do
@@ -595,10 +552,10 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TSize);
+procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TMemSize);
 var
-  FullBlocks:     TSize;
-  RemainingSize:  TSize;
+  FullBlocks:     TMemSize;
+  RemainingSize:  TMemSize;
 begin
 with PSHA3Context_Internal(Context)^ do
   begin
@@ -624,11 +581,7 @@ with PSHA3Context_Internal(Context)^ do
         BufferSHA3(HashState,Buffer,FullBlocks * HashState.BlockSize);
         If (FullBlocks * HashState.BlockSize) < Size then
           begin
-            {$IFDEF x64}
-            TransferSize := Size - (FullBlocks * HashState.BlockSize);
-            {$ELSE}
-            TransferSize := Size - (Int64(FullBlocks) * HashState.BlockSize);
-            {$ENDIF}
+            TransferSize := Size - (UInt64(FullBlocks) * HashState.BlockSize);
             Move({%H-}Pointer({%H-}PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
           end;
       end;
@@ -637,7 +590,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TSize): TSHA3Hash;
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3Hash;
 begin
 SHA3_Update(Context,Buffer,Size);
 Result := SHA3_Final(Context);
@@ -655,7 +608,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TSize; HashBits: LongWord = 0): TSHA3Hash;
+Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
 begin
 Result := LastBufferSHA3(InitialSHA3State(HashSize,HashBits),Buffer,Size);
 end;
