@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2015-12-15
+  ©František Milt 2016-03-01
 
-  Version 1.1.1
+  Version 1.1.2
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -117,7 +117,14 @@ Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBi
 implementation
 
 uses
-  SysUtils, Math;
+  SysUtils, Math
+  {$IF Defined(FPC) and not Defined(Unicode)}
+  (*
+    If compiler throws error that LazUTF8 unit cannot be found, you have to
+    add LazUtils to required packages (Project > Project Inspector).
+  *)
+  , LazUTF8
+  {$IFEND};
 
 const
   RoundConsts: array[0..23] of UInt64 = (
@@ -530,7 +537,11 @@ Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UIn
 var
   FileStream: TFileStream;
 begin
+{$IF Defined(FPC) and not Defined(Unicode)}
+FileStream := TFileStream.Create(UTF8ToSys(FileName), fmOpenRead or fmShareDenyWrite);
+{$ELSE}
 FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+{$IFEND}
 try
   Result := StreamSHA3(HashSize,FileStream,-1,HashBits);
 finally
