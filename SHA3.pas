@@ -33,21 +33,6 @@ interface
 
 {$DEFINE LargeBuffer}
 
-{$IF defined(CPUX86_64) or defined(CPUX64)}
-  {$DEFINE x64}
-  {$IF not(defined(WINDOWS) or defined(MSWINDOWS))}
-    {$DEFINE PurePascal}
-  {$IFEND}
-{$ELSEIF defined(CPU386)}
-  {$DEFINE x86}
-{$ELSE}
-  {$DEFINE PurePascal}
-{$IFEND}
-
-{$IF defined(FPC) and not defined(PurePascal)}
-  {$ASMMODE Intel}
-{$IFEND}
-
 {$IFDEF ENDIAN_BIG}
   {$MESSAGE FATAL 'Big-endian system not supported'}
 {$ENDIF}
