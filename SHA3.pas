@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2016-03-01
+  ©František Milt 2016-07-30
 
-  Version 1.1.2
+  Version 1.1.3
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -58,7 +58,7 @@ uses
 type
   TKeccakHashSize = (Keccak224,Keccak256,Keccak384,Keccak512,Keccak_b,
                      SHA3_224,SHA3_256,SHA3_384,SHA3_512,SHAKE128,SHAKE256);
-                     
+
   TSHA3HashSize = TKeccakHashSize;
 
   TKeccakSponge = array[0..4,0..4] of UInt64;  // First index is Y, second X
@@ -89,6 +89,7 @@ Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
 Function TryStrToSHA3(HashSize: TSHA3HashSize;const Str: String; out Hash: TSHA3Hash): Boolean;
 Function StrToSHA3Def(HashSize: TSHA3HashSize;const Str: String; Default: TSHA3Hash): TSHA3Hash;
 Function SameSHA3(A,B: TSHA3Hash): Boolean;
+Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;
 
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize); overload;
 Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
@@ -117,7 +118,7 @@ Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBi
 implementation
 
 uses
-  SysUtils, Math
+  SysUtils, Math, BitOps
   {$IF Defined(FPC) and not Defined(Unicode)}
   (*
     If compiler throws error that LazUTF8 unit cannot be found, you have to
@@ -151,58 +152,6 @@ type
     TransferBuffer: array[0..199] of UInt8;
   end;
   PSHA3Context_Internal = ^TSHA3Context_Internal;
-
-//==============================================================================    
-
-Function ROL(Value: UInt64; Shift: Byte): UInt64; register; {$IFNDEF PurePascal}assembler;
-asm
-{$IFDEF x64}
-    MOV   RAX,  RCX
-    MOV   CL,   DL
-    ROL   RAX,  CL
-{$ELSE}
-    MOV   ECX,  EAX
-    AND   ECX,  $3F
-    CMP   ECX,  32
-
-    JAE   @Above31
-
-  @Below32:
-    MOV   EAX,  dword ptr [Value]
-    MOV   EDX,  dword ptr [Value + 4]
-    CMP   ECX,  0
-    JE    @FuncEnd
-
-    MOV   dword ptr [Value],  EDX
-    JMP   @Rotate
-
-  @Above31:
-    MOV   EDX,  dword ptr [Value]
-    MOV   EAX,  dword ptr [Value + 4]
-    JE    @FuncEnd
-
-    AND   ECX,  $1F
-
-  @Rotate:
-    SHLD  EDX,  EAX, CL
-    SHL   EAX,  CL
-    PUSH  EAX
-    MOV   EAX,  dword ptr [Value]
-    XOR   CL,   31
-    INC   CL
-    SHR   EAX,  CL
-    POP   ECX
-    OR    EAX,  ECX
-
-  @FuncEnd:
-{$ENDIF}
-end;
-{$ELSE}
-begin
-Shift := Shift and $3F;
-Result := UInt64((Value shl Shift) or (Value shr (64 - Shift)));
-end;
-{$ENDIF}
 
 //==============================================================================
 
@@ -405,6 +354,13 @@ If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) and
       If A.HashData[i] <> B.HashData[i] then Exit;
     Result := True;
   end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;
+begin
+Result := Hash;
 end;
 
 //==============================================================================
