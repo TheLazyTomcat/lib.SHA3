@@ -26,6 +26,10 @@
     SHAKE128
     SHAKE256
 
+  Dependencies:
+    AuxTypes - github.com/ncs-sniper/Lib.AuxTypes
+    BitOps   - github.com/ncs-sniper/Lib.BitOps
+
 ===============================================================================}
 unit SHA3;
 
