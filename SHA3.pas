@@ -121,6 +121,7 @@ uses
 {$IFDEF FPC_DisableWarns}
   {$WARN 4055 OFF} // Conversion between ordinals and pointers is not portable
   {$WARN 4056 OFF} // Conversion between ordinals and pointers is not portable
+  {$WARN 5092 OFF} // Variable "$1" of a managed type does not seem to be initialized
 {$ENDIF}
 
 const
