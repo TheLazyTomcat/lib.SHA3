@@ -37,8 +37,6 @@
 ===============================================================================}
 unit SHA3;
 
-interface
-
 {$DEFINE LargeBuffer}
 
 {$IFDEF ENDIAN_BIG}
@@ -48,7 +46,10 @@ interface
 {$IFDEF FPC}
   {$MODE ObjFPC}{$H+}
   {$DEFINE FPC_DisableWarns}
+  {$MACRO ON}
 {$ENDIF}
+
+interface
 
 uses
   Classes, AuxTypes;
@@ -121,11 +122,16 @@ uses
   SysUtils, Math, BitOps, StrRect;
 
 {$IFDEF FPC_DisableWarns}
-  {$WARN 4055 OFF} // Conversion between ordinals and pointers is not portable
-  {$WARN 4056 OFF} // Conversion between ordinals and pointers is not portable
+  {$DEFINE FPCDWM}
+  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
+  {$PUSH}{$WARN 2005 OFF} // Comment level $1 found
   {$IF Defined(FPC) and (FPC_FULLVERSION >= 30000)}
-    {$WARN 5092 OFF} // Variable "$1" of a managed type does not seem to be initialized
+    {$DEFINE W5092:={$WARN 5092 OFF}} // Variable "$1" of a managed type does not seem to be initialized
+  {$ELSE}
+    {$DEFINE W5092:=}
   {$IFEND}
+  {$POP}
 {$ENDIF}
 
 const
@@ -280,7 +286,9 @@ BytesToSqueeze := State.HashBits shr 3;
 If BytesToSqueeze > State.BlockSize then
   while BytesToSqueeze > 0 do
     begin
+    {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
       Move(State.Sponge,Pointer(PtrUInt(@Buffer) + UInt64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
+    {$IFDEF FPCDWM}{$POP}{$ENDIF}
       Permute(State);
       Dec(BytesToSqueeze,Min(BytesToSqueeze,State.BlockSize));
     end
@@ -354,6 +362,7 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5092{$ENDIF}
 Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
 var
   HashCharacters: Integer;
@@ -381,6 +390,7 @@ SetLength(Result.HashData,Length(Str) shr 1);
 For i := Low(Result.HashData) to High(Result.HashData) do
   Result.HashData[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -462,6 +472,7 @@ LastBlockSize := Size - (UInt64(FullBlocks) * State.BlockSize);
 HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
 HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
 try
+{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
   Move(Pointer(PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
   case State.HashSize of
     Keccak224..Keccak_b:  PUInt8(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
@@ -472,6 +483,7 @@ try
   end;
   PUInt8(PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ := PUInt8(PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
   BufferSHA3(State,HelpBlocksBuff^,HelpBlocks * State.BlockSize);
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 finally
   FreeMem(HelpBlocksBuff,HelpBlocks * State.BlockSize);
 end;
@@ -592,7 +604,9 @@ with PSHA3Context_Internal(Context)^ do
             BufferSHA3(HashState,TransferBuffer,HashState.BlockSize);
             RemainingSize := Size - (HashState.BlockSize - TransferSize);
             TransferSize := 0;
+          {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
             SHA3_Update(Context,Pointer(PtrUInt(@Buffer) + (Size - RemainingSize))^,RemainingSize);
+          {$IFDEF FPCDWM}{$POP}{$ENDIF}
           end
         else
           begin
@@ -607,7 +621,9 @@ with PSHA3Context_Internal(Context)^ do
         If (FullBlocks * HashState.BlockSize) < Size then
           begin
             TransferSize := Size - (UInt64(FullBlocks) * HashState.BlockSize);
+          {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
             Move(Pointer(PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
+          {$IFDEF FPCDWM}{$POP}{$ENDIF}
           end;
       end;
   end;
