@@ -11,7 +11,7 @@
 
   ©František Milt 2018-10-22
 
-  Version 1.1.3
+  Version 1.1.6
 
   Following hash variants are supported in current implementation:
     Keccak224
