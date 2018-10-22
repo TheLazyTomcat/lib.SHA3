@@ -9,9 +9,9 @@
 
   SHA3/Keccak hash calculation
 
-  ©František Milt 2018-05-03
+  ©František Milt 2018-10-22
 
-  Version 1.1.5
+  Version 1.1.3
 
   Following hash variants are supported in current implementation:
     Keccak224
@@ -45,8 +45,16 @@ unit SHA3;
 
 {$IFDEF FPC}
   {$MODE ObjFPC}{$H+}
+  {$INLINE ON}
+  {$DEFINE CanInline}
   {$DEFINE FPC_DisableWarns}
   {$MACRO ON}
+{$ELSE}
+  {$IF CompilerVersion >= 17 then}  // Delphi 2005+
+    {$DEFINE CanInline}
+  {$ELSE}
+    {$UNDEF CanInline}
+  {$IFEND}
 {$ENDIF}
 
 interface
@@ -89,17 +97,20 @@ Function SHA3ToStr(Hash: TSHA3Hash): String;
 Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
 Function TryStrToSHA3(HashSize: TSHA3HashSize;const Str: String; out Hash: TSHA3Hash): Boolean;
 Function StrToSHA3Def(HashSize: TSHA3HashSize;const Str: String; Default: TSHA3Hash): TSHA3Hash;
+
+Function CompareSHA3(A,B: TSHA3Hash): Integer;
 Function SameSHA3(A,B: TSHA3Hash): Boolean;
-Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;
+
+Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
 
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize); overload;
 Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
 
 Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash; overload;
 
-Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;
-Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;
-Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;
+Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
+Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
+Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
 
 Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3Hash;
 Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UInt32 = 0): TSHA3Hash;
@@ -410,6 +421,33 @@ Function StrToSHA3Def(HashSize: TSHA3HashSize; const Str: String; Default: TSHA3
 begin
 If not TryStrToSHA3(HashSize,Str,Result) then
   Result := Default;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CompareSHA3(A,B: TSHA3Hash): Integer;
+var
+  i:  Integer;
+begin
+Result := 0;
+If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) and
+  (Length(A.HashData) = Length(B.HashData)) then
+  begin
+    For i := Low(A.HashData) to High(A.HashData) do
+      begin
+        If A.HashData[i] < B.HashData[i] then
+          begin
+            Result := -1;
+            Break;
+          end
+        else If A.HashData[i] > B.HashData[i] then
+          begin
+            Result := 1;
+            Break;
+          end;
+      end;
+  end
+else raise Exception.Create('CompareSHA3: Cannot compare different hashes.');
 end;
 
 //------------------------------------------------------------------------------
