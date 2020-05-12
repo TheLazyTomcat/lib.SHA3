@@ -113,6 +113,14 @@
 ===============================================================================}
 unit SHA3;
 
+{$IF defined(CPU64) or defined(CPU64BITS)}
+  {$DEFINE 64bit}
+{$ELSEIF defined(CPU16)}
+  {$MESSAGE FATAL '16bit CPU not supported'}
+{$ELSE}
+  {$DEFINE 32bit}
+{$IFEND}
+
 {$IFDEF FPC}
   {$MODE Delphi}
   {$INLINE ON}
@@ -126,7 +134,6 @@ unit SHA3;
     {$UNDEF CanInline}
   {$IFEND}
 {$ENDIF}
-
 interface
 
 uses
@@ -750,7 +757,7 @@ Function CreateFromByFunction(Keccak: TKeccak): TKeccakHash; overload;{$IFDEF Ca
 ===============================================================================}
 {
   For Keccak/SHA3/SHAKE, it is not enough to pass hash from previous step when
-  doing continuous hashing (BufferMD2 > LastBufferMD2). TKecakState type is
+  doing continuous hashing (BufferSHA3 > LastBufferSHA3). TKecakState type is
   introduced for this purpose.
 }
 type
@@ -807,8 +814,16 @@ Function SHA3_Hash(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; Ha
 implementation
 
 uses
-  SysUtils, Math,
+  SysUtils,
   BitOps;
+
+{$IFDEF FPC_DisableWarns}
+  {$DEFINE FPCDWM}
+  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
+  {$DEFINE W5024:={$WARN 5024 OFF}} // Parameter "$1" not used
+  {$DEFINE W6018:={$WARN 6018 OFF}} // unreachable code
+{$ENDIF}
 
 {===============================================================================
     Auxiliary functions - implementation
@@ -933,7 +948,7 @@ const
     {X = 3} (28,55,25,21,56),
     {X = 4} (27,20,39, 8,14));
 
-  KECCAK_DEFAULT_CAPACITY = 9 * 8 * SizeOf(TKeccakWord);  // 576
+  KECCAK_DEFAULT_CAPACITY = 9 * 8 * SizeOf(TKeccakWord);  // 576 bits
 
 {===============================================================================
     TKeccakHash - class implementation
@@ -992,10 +1007,12 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TKeccakHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
 Result := KECCAK_DEFAULT_CAPACITY;
 end;
+{$IFDEF FPCDWM}{$POP}W5024{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -1143,7 +1160,37 @@ var
     Move(fSponge,Dest,Count);
   {$ENDIF}
   end;
-  
+
+  {$IFDEF FPCDWM}{$PUSH}W6018{$ENDIF}
+  Function Min(A,B: TMemSize): TMemSize;
+  begin
+  {$IFDEF 64bit}
+    If not AuxTypes.NativeUInt64 then
+      begin
+        If Int64Rec(A).Hi < Int64Rec(B).Hi then
+          Result := A
+        else If Int64Rec(A).Hi > Int64Rec(B).Hi then
+          Result := B
+        else
+          begin
+            If Int64Rec(A).Lo < Int64Rec(B).Lo then
+              Result := A
+            else
+              Result := B;
+          end;
+      end
+    else
+      begin
+        If A < B then Result := A
+          else Result := B;
+      end
+  {$ELSE}
+    If A < B then Result := A
+      else Result := B;
+  {$ENDIF}
+  end;
+  {$IFDEF FPCDWM}{$POP}{$ENDIF}
+
 begin
 If Size > 0 then
   begin
@@ -1151,7 +1198,9 @@ If Size > 0 then
     If Size > fBlockSize then
       while Size > 0 do
         begin
+        {$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
           SqueezeSponge(Pointer(PtrUInt(@Buffer) + Offset)^,Min(Size,fBlockSize));
+        {$IFDEF FPCDWM}{$POP}{$ENDIF}
           Inc(Offset,Min(Size,fBlockSize));
           Dec(Size,Min(Size,fBlockSize));
           Permute;
@@ -1209,12 +1258,12 @@ begin
 If fTempCount < fBlockSize then
   begin
     // padding can fit
-  //{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
+  {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
     FillChar(Pointer(PtrUInt(fTempBlock) + PtrUInt(fTempCount))^,fBlockSize - fTempCount,0);
     PUInt8(PtrUInt(fTempBlock) + PtrUInt(fTempCount))^ := PaddingByte;
-    PUInt8(PtrUInt(fTempBlock) + PtrUInt(fBlockSize) - 1)^ :=
-      PUInt8(PtrUInt(fTempBlock) + PtrUInt(fBlockSize) - 1)^ or $80;
-  //{$IFDEF FPCDWM}{$POP}{$ENDIF}
+    PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ :=
+      PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ or $80;
+  {$IFDEF FPCDWM}{$POP}{$ENDIF}
     ProcessBlock(fTempBlock^);
     Squeeze;
   end
@@ -1224,11 +1273,11 @@ else
     If fTempCount = fBlockSize then
       begin
         ProcessBlock(fTempBlock^);
-      //{$IFDEF FPCDWM}{$PUSH}W4055{$ENDIF}
+      {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
         FillChar(fTempBlock^,fBlockSize,0);
         PUInt8(fTempBlock)^ := PaddingByte;
-        PUInt8(PtrUInt(fTempBlock) + PtrUInt(fBlockSize) - 1)^ := $80;
-      //{$IFDEF FPCDWM}{$POP}{$ENDIF}
+        PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ := $80;
+      {$IFDEF FPCDWM}{$POP}{$ENDIF}
         ProcessBlock(fTempBlock^);
         Squeeze;
       end
@@ -1459,11 +1508,13 @@ end;
 
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 constructor TKeccak0Hash.CreateAndInitFrom(Hash: TKeccak);
 begin
 CreateAndInit;
 // this clas does not have a true hash, drop the Hash parameter
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -2923,10 +2974,12 @@ FillChar(fSHAKE128[0],Length(fSHAKE128),0);
 end;
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TSHAKE128Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
 Result := 256;  // capacity is static
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
@@ -3086,10 +3139,12 @@ FillChar(fSHAKE256[0],Length(fSHAKE256),0);
 end;
 //------------------------------------------------------------------------------
 
+{$IFDEF FPCDWM}{$PUSH}W5024{$ENDIF}
 class Function TSHAKE256Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
 Result := 512;  // capacity is static
 end;
+{$IFDEF FPCDWM}{$POP}{$ENDIF}
 
 //------------------------------------------------------------------------------
 
