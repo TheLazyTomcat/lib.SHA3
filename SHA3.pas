@@ -56,13 +56,31 @@
                                                          |
                                                          |- TKeccak_CHash
                                                          |
-                                                         |- *TSHA3Hash --- TSHA3_224Hash
-                                                         |              |- TSHA3_256Hash
-                                                         |              |- TSHA3_384Hash
-                                                         |              |- TSHA3_512Hash
+                                                         |- *TSHA3Hash  --- TSHA3_224Hash
+                                                         |               |- TSHA3_256Hash
+                                                         |               |- TSHA3_384Hash
+                                                         |               |- TSHA3_512Hash
                                                          |
                                                          |- *TSHAKEHash --- TSHAKE128Hash
                                                                          |- TSHAKE256Hash
+
+
+    *TKeccakHash --- TKeccak0Hash
+                  |
+                  |- *TKeccakDefHash --- *TKeccakFixHash --- TKeccak224Hash
+                                      |                   |- TKeccak256Hash
+                                      |                   |- TKeccak384Hash
+                                      |                   |- TKeccak512Hash
+                                      |                   |
+                                      |                   |- *TSHA3Hash ---- TSHA3_224Hash
+                                      |                                   |- TSHA3_256Hash
+                                      |                                   |- TSHA3_384Hash
+                                      |                                   |- TSHA3_512Hash
+                                      |
+                                      |- *TKeccakVarHash --- TKeccakCHash
+                                                          |
+                                                          |- *TSHAKEHash --- TSHAKE128Hash
+                                                                          |- TSHAKE256Hash
 
 
   SHA3/Keccak hash calculation
@@ -119,19 +137,19 @@ uses
     Common types and constants
 ===============================================================================}
 {
-  Bytes in all Keccak and SHA-3 hashes are always ordered from the most
-  significant byte to least significant byte (big endian).
+  Bytes in all Keccak, SHA-3 and SHAKE hashes are always ordered from the most
+  significant byte to the least significant byte (big endian).
 
-  SHA-3 does not differ in little and big endian form, as it is not a single
-  quantity, therefore methods like SHA3_*ToLE or SHA3_*ToBE do nothing and are
-  present only for the sake of completeness.
+  Keccak/SHA-3/SHAKE does not differ in little and big endian forms, as it is
+  not a single quantity, therefore methods like SHA3_*ToLE or SHA3_*ToBE do
+  nothing and are present only for the sake of completeness.
 }
 type
   // fixed length hashes
-  TKeccak224 = array[0..27] of UInt8;   PKeccak224 = ^TKeccak224;
-  TKeccak256 = array[0..31] of UInt8;   PKeccak256 = ^TKeccak256;
-  TKeccak384 = array[0..47] of UInt8;   PKeccak384 = ^TKeccak384;
-  TKeccak512 = array[0..64] of UInt8;   PKeccak512 = ^TKeccak512;
+  TKeccak224 = packed array[0..27] of UInt8;    PKeccak224 = ^TKeccak224;
+  TKeccak256 = packed array[0..31] of UInt8;    PKeccak256 = ^TKeccak256;
+  TKeccak384 = packed array[0..47] of UInt8;    PKeccak384 = ^TKeccak384;
+  TKeccak512 = packed array[0..63] of UInt8;    PKeccak512 = ^TKeccak512;
 
   TSHA3_224 = type TKeccak224;    PSHA3_224 = ^TSHA3_224;
   TSHA3_256 = type TKeccak256;    PSHA3_256 = ^TSHA3_256;
@@ -139,31 +157,50 @@ type
   TSHA3_512 = type TKeccak512;    PSHA3_512 = ^TSHA3_512;
 
   // variable length hashes
-  TKeccak_Variable = array of UInt8;  // also used internally as buffer
+  TKeccakVar = packed array of UInt8; // also used internally as a buffer
 
-  TKeccak_c = TKeccak_Variable;   PKeccak_c = ^TKeccak_c; 
+  TKeccakC = type TKeccakVar;     PKeccakC = ^TKeccakC;
 
-  TSHAKE128 = type TKeccak_Variable;    PSHAKE128 = ^TSHAKE128;
-  TSHAKE256 = type TKeccak_Variable;    PSHAKE256 = ^TSHAKE256;
+  TSHAKE128 = type TKeccakVar;    PSHAKE128 = ^TSHAKE128;
+  TSHAKE256 = type TKeccakVar;    PSHAKE256 = ^TSHAKE256;
 
-  TKeccakFunction = (fnKECCAK0,fnKECCAK224,fnKECCAK256,fnKECCAK384,fnKECCAK512,fnKECCAK_C,
+  TKeccakFunction = (fnKeccak0,fnKeccak224,fnKeccak256,fnKeccak384,fnKeccak512,fnKeccakC,
                      fnSHA3_224,fnSHA3_256,fnSHA3_384,fnSHA3_512,fnSHAKE128,fnSHAKE256);
 
   TKeccak = record
     HashFunction: TKeccakFunction;
     HashBits:     UInt32;
-    HashData:     TKeccak_Variable;
+    HashData:     TKeccakVar;
   end;
 
+  // some aliases
+  TSHA3Function = TKeccakFunction;
+  
   TSHA3 = TKeccak;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+const
+  ZeroKeccak224: TKeccak224 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroKeccak256: TKeccak256 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroKeccak384: TKeccak384 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                               0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroKeccak512: TKeccak512 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                               0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 
+  ZeroSHA3_224: TSHA3_224 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroSHA3_256: TSHA3_256 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroSHA3_384: TSHA3_384 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+  ZeroSHA3_512: TSHA3_512 = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+type
   TKeccakWord = UInt64;
 
-  TKeccakSponge = array[0..4,0..4] of TKeccakWord;
+  TKeccakSponge = packed array[0..4,0..4] of TKeccakWord;
 
-  TKeccakSpongeOverlay = array[0..24] of TKeccakWord; // only used internally  
+  TKeccakSpongeOverlay = packed array[0..24] of TKeccakWord;  // only used internally
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -172,13 +209,17 @@ type
 
   ESHA3IncompatibleClass    = class(ESHA3Exception);
   ESHA3IncompatibleFunction = class(ESHA3Exception);
+  ESHA3IncompatibleHashBits = class(ESHA3Exception);
   ESHA3IncompatibleSize     = class(ESHA3Exception);
   ESHA3ProcessingError      = class(ESHA3Exception);
-  ESHA3InvalidBits          = class(ESHA3Exception);
+  ESHA3InvalidHashFunction  = class(ESHA3Exception);
+  ESHA3InvalidHashBits      = class(ESHA3Exception);
+  ESHA3InvalidSize          = class(ESHA3Exception);
+  ESHA3InvalidCapacity      = class(ESHA3Exception);
 
 {-------------------------------------------------------------------------------
 ================================================================================
-                                   TKeccakHash                                                                     
+                                   TKeccakHash
 ================================================================================
 -------------------------------------------------------------------------------}
 {===============================================================================
@@ -190,39 +231,50 @@ type
     fSponge:    TKeccakSponge;
     fHashBits:  UInt32;
     fCapacity:  UInt32;
-    procedure SetHashBits(Value: UInt32); virtual;  // must be called before Initialize
+    // getters, setters
     Function GetBitrate: UInt32; virtual;
-    class Function HashBufferToLE(HashBuffer: TKeccak_Variable): TKeccak_Variable; virtual;
-    class Function HashBufferToBE(HashBuffer: TKeccak_Variable): TKeccak_Variable; virtual;
-    class Function HashBufferFromLE(HashBuffer: TKeccak_Variable): TKeccak_Variable; virtual;
-    class Function HashBufferFromBE(HashBuffer: TKeccak_Variable): TKeccak_Variable; virtual;
-    class Function CapacityFromHashBits(Bits: UInt32): UInt32; virtual;
+    Function GetHashBuffer: TKeccakVar; virtual;              // override in descendants
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); virtual; // -//-
+    // endianness conversion
+    class Function HashBufferToLE(HashBuffer: TKeccakVar): TKeccakVar; virtual;
+    class Function HashBufferToBE(HashBuffer: TKeccakVar): TKeccakVar; virtual;
+    class Function HashBufferFromLE(HashBuffer: TKeccakVar): TKeccakVar; virtual;
+    class Function HashBufferFromBE(HashBuffer: TKeccakVar): TKeccakVar; virtual;
+    // hash function specific stuff
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; virtual;
     class Function PaddingByte: UInt8; virtual;
-    Function GetHashBuffer: TKeccak_Variable; virtual;              // override in descendants
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); virtual; // -//-
+    // processing
     procedure Permute; virtual;
     procedure Squeeze; overload; virtual;
-    procedure SqueezeInternal(var Buffer; Size: TMemSize); virtual;
+    procedure SqueezeTo(var Buffer; Size: TMemSize); virtual;
     procedure ProcessFirst(const Block); override;
     procedure ProcessBlock(const Block); override;
     procedure ProcessLast; override;
+    // initialization
+    procedure InitHashBits(Value: UInt32); virtual;   // must be called before Initialize indescendants
     procedure Initialize; override;
   public
-    Function HashSize: TMemSize; reintroduce;
+    class Function LaneSize: UInt32; virtual;         // in bits, also width of the keccak word
+    class Function PermutationWidth: UInt32; virtual; // in bits  
+    Function HashSize: TMemSize; reintroduce;         // hides class functions
     class Function HashEndianness: THashEndianness; override;
     class Function HashFunction: TKeccakFunction; virtual; abstract;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual; abstract;
     procedure Init; override;
     Function Compare(Hash: THashBase): Integer; override;
     Function AsString: String; override;
     procedure FromString(const Str: String); override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak); reintroduce; overload; virtual;
     procedure SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault); override;
     procedure LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault); override;
-    property Sponge: TKeccakSponge read fSponge;
+    property Sponge: TKeccakSponge read fSponge write fSponge;
     property HashBits: UInt32 read fHashBits;
     property Capacity: UInt32 read fCapacity;
     property Bitrate: UInt32 read GetBitrate;
   end;
+
+  TKeccakHashClass = class of TKeccakHash;  
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -239,24 +291,42 @@ type
   public
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
-    procedure Squeeze(var Buffer; Size: TMemSize); overload; virtual;    
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
+    procedure Permute; override;
+    procedure Squeeze(var Buffer; Size: TMemSize); overload; virtual;
   end;
 
 {-------------------------------------------------------------------------------
 ================================================================================
-                                 TKeccakDefinedHash
+                                 TKeccakDefHash
 ================================================================================
 -------------------------------------------------------------------------------}
 {===============================================================================
-    TKeccakDefinedHash - class declaration
+    TKeccakDefHash - class declaration
 ===============================================================================}
 type
-  TKeccakDefinedHash = class(TKeccakHash)
+  TKeccakDefHash = class(TKeccakHash)
   protected
-    procedure SetHashBits(Value: UInt32); override;
     Function GetKeccak: TKeccak; virtual;
   public
     property Keccak: TKeccak read GetKeccak;
+  end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                 TKeccakFixHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakFixHash - class declaration
+===============================================================================}
+type
+  TKeccakFixHash = class(TKeccakDefHash)
+  protected
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
+  public
+    procedure FromString(const Str: String); override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak); overload; override;
   end;
 
 {-------------------------------------------------------------------------------
@@ -268,12 +338,12 @@ type
     TKeccak224Hash - class declaration
 ===============================================================================}
 type
-  TKeccak224Hash = class(TKeccakDefinedHash)
+  TKeccak224Hash = class(TKeccakFixHash)
   private
     fKeccak224: TKeccak224;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function Keccak224ToLE(Keccak224: TKeccak224): TKeccak224; virtual;
@@ -283,9 +353,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
     constructor CreateAndInitFrom(Hash: TKeccak224); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TKeccak224); reintroduce;
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak224); overload; virtual;
     property Keccak224: TKeccak224 read fKeccak224;
   end;
 
@@ -298,12 +369,12 @@ type
     TKeccak256Hash - class declaration
 ===============================================================================}
 type
-  TKeccak256Hash = class(TKeccakDefinedHash)
+  TKeccak256Hash = class(TKeccakFixHash)
   private
     fKeccak256: TKeccak256;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function Keccak256ToLE(Keccak256: TKeccak256): TKeccak256; virtual;
@@ -313,9 +384,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
     constructor CreateAndInitFrom(Hash: TKeccak256); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TKeccak256); reintroduce;
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak256); overload; virtual;
     property Keccak256: TKeccak256 read fKeccak256;
   end;
 
@@ -328,12 +400,12 @@ type
     TKeccak384Hash - class declaration
 ===============================================================================}
 type
-  TKeccak384Hash = class(TKeccakDefinedHash)
+  TKeccak384Hash = class(TKeccakFixHash)
   private
     fKeccak384: TKeccak384;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function Keccak384ToLE(Keccak384: TKeccak384): TKeccak384; virtual;
@@ -343,9 +415,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TKeccak384); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TKeccak384); reintroduce;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccak384); overload; virtual; 
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak384); overload; virtual;
     property Keccak384: TKeccak384 read fKeccak384;
   end;
 
@@ -358,12 +431,12 @@ type
     TKeccak512Hash - class declaration
 ===============================================================================}
 type
-  TKeccak512Hash = class(TKeccakDefinedHash)
+  TKeccak512Hash = class(TKeccakFixHash)
   private
     fKeccak512: TKeccak512;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function Keccak512ToLE(Keccak512: TKeccak512): TKeccak512; virtual;
@@ -373,43 +446,11 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TKeccak512); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TKeccak512); reintroduce;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccak512); overload; virtual;  
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TKeccak512); overload; virtual;
     property Keccak512: TKeccak512 read fKeccak512;
-  end;
-
-{-------------------------------------------------------------------------------
-================================================================================
-                                  TKeccak_CHash
-================================================================================
--------------------------------------------------------------------------------}
-{===============================================================================
-    TKeccak_CHash - class declaration
-===============================================================================}
-type {$message 'rework - realloc, size change, ...'}
-  TKeccak_CHash = class(TKeccakDefinedHash)
-  private
-    fKeccak_c:  TKeccak_c;
-  protected
-    procedure SetHashBits(Value: UInt32); override; 
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
-    Function GetKeccak_c: TKeccak_c; virtual;
-    procedure Initialize; override;
-  public
-    class Function Keccak_cToLE(Keccak_c: TKeccak_c): TKeccak_c; virtual;
-    class Function Keccak_cToBE(Keccak_c: TKeccak_c): TKeccak_c; virtual;
-    class Function Keccak_cFromLE(Keccak_c: TKeccak_c): TKeccak_c; virtual;
-    class Function Keccak_cFromBE(Keccak_c: TKeccak_c): TKeccak_c; virtual;
-    class Function HashName: String; override;
-    class Function HashFunction: TKeccakFunction; override;
-    constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TKeccak_c); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TKeccak_c); reintroduce;
-    property HashBits: UInt32 read fHashBits write SetHashBits;
-    property Keccak_c: TKeccak_c read GetKeccak_c;
   end;
 
 {-------------------------------------------------------------------------------
@@ -421,9 +462,9 @@ type {$message 'rework - realloc, size change, ...'}
     TSHA3Hash - class declaration
 ===============================================================================}
 type
-  TSHA3Hash = class(TKeccakDefinedHash)
+  TSHA3Hash = class(TKeccakFixHash)
   protected
-    class Function CapacityFromHashBits(Bits: UInt32): UInt32; override;
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
     class Function PaddingByte: UInt8; override;
   public
     property SHA3: TSHA3 read GetKeccak;
@@ -442,8 +483,8 @@ type
   private
     fSHA3_224: TSHA3_224;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function SHA3_224ToLE(SHA3_224: TSHA3_224): TSHA3_224; virtual;
@@ -453,9 +494,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TSHA3); overload; virtual;
+    constructor CreateAndInitFrom(Hash: TSHA3); overload; override;
     constructor CreateAndInitFrom(Hash: TSHA3_224); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TSHA3_224); reintroduce;
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHA3_224); overload; virtual;
     property SHA3_224: TSHA3_224 read fSHA3_224;
   end;
 
@@ -472,8 +514,8 @@ type
   private
     fSHA3_256: TSHA3_256;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function SHA3_256ToLE(SHA3_256: TSHA3_256): TSHA3_256; virtual;
@@ -483,9 +525,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TSHA3); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TSHA3_256); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TSHA3_256); reintroduce;
+    constructor CreateAndInitFrom(Hash: TSHA3); overload; override;
+    constructor CreateAndInitFrom(Hash: TSHA3_256); overload; virtual; 
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHA3_256); overload; virtual;
     property SHA3_256: TSHA3_256 read fSHA3_256;
   end;
 
@@ -502,8 +545,8 @@ type
   private
     fSHA3_384: TSHA3_384;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function SHA3_384ToLE(SHA3_384: TSHA3_384): TSHA3_384; virtual;
@@ -513,9 +556,10 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TSHA3); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TSHA3_384); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TSHA3_384); reintroduce;
+    constructor CreateAndInitFrom(Hash: TSHA3); overload; override;
+    constructor CreateAndInitFrom(Hash: TSHA3_384); overload; virtual; 
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHA3_384); overload; virtual;
     property SHA3_384: TSHA3_384 read fSHA3_384;
   end;
 
@@ -532,8 +576,8 @@ type
   private
     fSHA3_512: TSHA3_512;
   protected
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
   public
     class Function SHA3_512ToLE(SHA3_512: TSHA3_512): TSHA3_512; virtual;
@@ -543,10 +587,65 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TSHA3); overload; virtual;
-    constructor CreateAndInitFrom(Hash: TSHA3_512); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TSHA3_512); reintroduce;
+    constructor CreateAndInitFrom(Hash: TSHA3); overload; override;
+    constructor CreateAndInitFrom(Hash: TSHA3_512); overload; virtual;  
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHA3_512); overload; virtual;
     property SHA3_512: TSHA3_512 read fSHA3_512;
+  end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                 TKeccakVarHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakVarHash - class declaration
+===============================================================================}
+type
+  TKeccakVarHash = class(TKeccakDefHash)
+  protected
+    procedure SetHashBits(Value: UInt32); virtual; abstract;
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
+  public
+    procedure FromStringDef(const Str: String; const Default: TKeccak); overload; override;
+    property HashBits: UInt32 read fHashBits write SetHashBits;    
+  end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                  TKeccakCHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakCHash - class declaration
+===============================================================================}
+type
+  TKeccakCHash = class(TKeccakVarHash)
+  private
+    fKeccakC: TKeccakC;
+  protected
+    procedure SetHashBits(Value: UInt32); override;
+    procedure SetCapacity(Value: UInt32); virtual;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
+    Function GetKeccakC: TKeccakC; virtual;
+    procedure Initialize; override;
+  public
+    class Function KeccakCToLE(KeccakC: TKeccakC): TKeccakC; virtual;
+    class Function KeccakCToBE(KeccakC: TKeccakC): TKeccakC; virtual;
+    class Function KeccakCFromLE(KeccakC: TKeccakC): TKeccakC; virtual;
+    class Function KeccakCFromBE(KeccakC: TKeccakC): TKeccakC; virtual;
+    class Function HashName: String; override;
+    class Function HashFunction: TKeccakFunction; override;
+    class Function MaxCapacity: UInt32; virtual;
+    constructor CreateAndInitFrom(Hash: THashBase); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccakC); overload; virtual;
+    procedure Init; override;    
+    procedure FromStringDef(const Str: String; const Default: TKeccakC); overload; virtual;
+    property Capacity: UInt32 read fCapacity write SetCapacity;
+    property KeccakC: TKeccakC read GetKeccakC;
   end;
 
 {-------------------------------------------------------------------------------
@@ -558,10 +657,9 @@ type
     TSHAKEHash - class declaration
 ===============================================================================}
 type
-  TSHAKEHash = class(TKeccakDefinedHash)
+  TSHAKEHash = class(TKeccakVarHash)
   protected
-    procedure SetHashBits(Value: UInt32); override;
-    class Function PaddingByte: UInt8; override;
+    class Function PaddingByte: UInt8; override;    
   end;
 
 {-------------------------------------------------------------------------------
@@ -578,9 +676,10 @@ type
     fSHAKE128:  TSHAKE128;
   protected
     procedure SetHashBits(Value: UInt32); override;
-    class Function CapacityFromHashBits(Bits: UInt32): UInt32; override;
-    Function GetHashBuffer: TKeccak_Variable; override;
-    procedure SetHashBuffer(HashBuffer: TKeccak_Variable); override;
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
+    Function GetSHAKE128: TSHAKE128; virtual;
     procedure Initialize; override;
   public
     class Function SHAKE128ToLE(SHAKE128: TSHAKE128): TSHAKE128; virtual;
@@ -590,87 +689,132 @@ type
     class Function HashName: String; override;
     class Function HashFunction: TKeccakFunction; override;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
-    constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
     constructor CreateAndInitFrom(Hash: TSHAKE128); overload; virtual;
-    procedure FromStringDef(const Str: String; const Default: TSHAKE128); reintroduce;
-    property HashBits: UInt32 read fHashBits write SetHashBits;    
-    property SHAKE128: TSHAKE128 read fSHAKE128;
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHAKE128); overload; virtual;
+    property HashBits: UInt32 read fHashBits write SetHashBits;
+    property SHAKE128: TSHAKE128 read GetSHAKE128;
   end;
 
-(*
+{-------------------------------------------------------------------------------
+================================================================================
+                                  TSHAKE256Hash                                 
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TSHAKE256Hash - class declaration
+===============================================================================}
 type
-  TKeccakHashSize = (Keccak224,Keccak256,Keccak384,Keccak512,Keccak_b,
-                     SHA3_224,SHA3_256,SHA3_384,SHA3_512,SHAKE128,SHAKE256);
-
-  TSHA3HashSize = TKeccakHashSize;
-
-  TKeccakSponge = array[0..4,0..4] of UInt64;  // First index is Y, second X
-  
-  TKeccakSpongeOverlay = array[0..24] of UInt64;
-
-  TKeccakState = record
-    HashSize:   TKeccakHashSize;
-    HashBits:   UInt32;
-    BlockSize:  UInt32;
-    Sponge:     TKeccakSponge;
+  TSHAKE256Hash = class(TSHAKEHash)
+  private
+    fSHAKE256:  TSHAKE256;
+  protected
+    procedure SetHashBits(Value: UInt32); override;
+    class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
+    Function GetHashBuffer: TKeccakVar; override;
+    procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
+    Function GetSHAKE256: TSHAKE256; virtual;
+    procedure Initialize; override;
+  public
+    class Function SHAKE256ToLE(SHAKE256: TSHAKE256): TSHAKE256; virtual;
+    class Function SHAKE256ToBE(SHAKE256: TSHAKE256): TSHAKE256; virtual;
+    class Function SHAKE256FromLE(SHAKE256: TSHAKE256): TSHAKE256; virtual;
+    class Function SHAKE256FromBE(SHAKE256: TSHAKE256): TSHAKE256; virtual;
+    class Function HashName: String; override;
+    class Function HashFunction: TKeccakFunction; override;
+    constructor CreateAndInitFrom(Hash: THashBase); overload; override;
+    constructor CreateAndInitFrom(Hash: TKeccak); overload; override;
+    constructor CreateAndInitFrom(Hash: TSHAKE256); overload; virtual;
+    procedure Init; override;
+    procedure FromStringDef(const Str: String; const Default: TSHAKE256); overload; virtual;
+    property HashBits: UInt32 read fHashBits write SetHashBits;
+    property SHAKE256: TSHAKE256 read GetSHAKE256;
   end;
+
+{===============================================================================
+    Auxiliary functions
+===============================================================================}
+
+Function ClassByFunction(HashFunction: TKeccakFunction): TKeccakHashClass;
+
+Function CreateByFunction(HashFunction: TKeccakFunction): TKeccakHash;{$IFDEF CanInline} inline; {$ENDIF}
+
+Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccakHash): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+Function CreateFromByFunction(Keccak: TKeccak): TKeccakHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+
+{===============================================================================
+    Backward compatibility functions
+===============================================================================}
+{
+  For Keccak/SHA3/SHAKE, it is not enough to pass hash from previous step when
+  doing continuous hashing (BufferMD2 > LastBufferMD2). TKecakState type is
+  introduced for this purpose.
+}
+type
+  TKeccakState = record
+    HashFunction: TKeccakFunction;
+    HashBits:     UInt32;
+    Sponge:       TKeccakSponge;
+  end;
+  PKeccakState = ^TKeccakState;
 
   TSHA3State = TKeccakState;
 
-  TKeccakHash = record
-    HashSize: TKeccakHashSize;
-    HashBits: UInt32;
-    HashData: array of UInt8;
-  end;
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-  TSHA3Hash = TKeccakHash;
+Function GetBlockSize(HashFunction: TSHA3Function): UInt32;
 
-Function GetBlockSize(HashSize: TSHA3HashSize): UInt32;
+Function InitialSHA3State(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3State;
 
-Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3State;
+Function SHA3ToStr(SHA3: TSHA3): String;
+Function StrToSHA3(HashFunction: TSHA3Function; Str: String): TSHA3;
+Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
+Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
 
-Function SHA3ToStr(Hash: TSHA3Hash): String;
-Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
-Function TryStrToSHA3(HashSize: TSHA3HashSize;const Str: String; out Hash: TSHA3Hash): Boolean;
-Function StrToSHA3Def(HashSize: TSHA3HashSize;const Str: String; Default: TSHA3Hash): TSHA3Hash;
+Function CompareSHA3(A,B: TSHA3): Integer;
+Function SameSHA3(A,B: TSHA3): Boolean;
 
-Function CompareSHA3(A,B: TSHA3Hash): Integer;
-Function SameSHA3(A,B: TSHA3Hash): Boolean;
+Function BinaryCorrectSHA3(Hash: TSHA3): TSHA3;{$IFDEF CanInline} inline; {$ENDIF}
 
-Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize); overload;
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
+Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
 
-Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash; overload;
+Function BufferSHA3(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3; overload;
 
-Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
-Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
-Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;{$IFDEF CanInline} inline; {$ENDIF}
+Function AnsiStringSHA3(HashFunction: TSHA3Function; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3;
+Function WideStringSHA3(HashFunction: TSHA3Function; const Str: WideString; HashBits: UInt32 = 0): TSHA3;
+Function StringSHA3(HashFunction: TSHA3Function; const Str: String; HashBits: UInt32 = 0): TSHA3;
 
-Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3Hash;
-Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UInt32 = 0): TSHA3Hash;
+Function StreamSHA3(HashFunction: TSHA3Function; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3;
+Function FileSHA3(HashFunction: TSHA3Function; const FileName: String; HashBits: UInt32 = 0): TSHA3;
 
 //------------------------------------------------------------------------------
 
 type
   TSHA3Context = type Pointer;
 
-Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3Context;
+Function SHA3_Init(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3Context;
 procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TMemSize);
-Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3Hash; overload;
-Function SHA3_Final(var Context: TSHA3Context): TSHA3Hash; overload;
-Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
-*)
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3; overload;
+Function SHA3_Final(var Context: TSHA3Context): TSHA3; overload;
+Function SHA3_Hash(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3;
 
 implementation
 
 uses
-  SysUtils, Math, BitOps, StrRect;
+  SysUtils, Math,
+  BitOps;
 
 {===============================================================================
-    Private auxiliary functions
+    Auxiliary functions - implementation
 ===============================================================================}
+{-------------------------------------------------------------------------------
+    Auxiliary functions - private functions
+-------------------------------------------------------------------------------}
 
 Function EndianSwap(Sponge: TKeccakSponge): TKeccakSponge; overload;
 var
@@ -678,6 +822,87 @@ var
 begin
 For i := Low(TKeccakSpongeOverlay) to High(TKeccakSpongeOverlay) do
   TKeccakSpongeOverlay(Result)[i] := EndianSwap(TKeccakSpongeOverlay(Sponge)[i]);
+end;
+
+//------------------------------------------------------------------------------
+{
+  BCF = Backward Compatibility Functions, yup ;-)
+}
+Function BCF_CreateByFunction(HashFunction: TKeccakFunction): TKeccakDefHash;
+begin
+If HashFunction <> fnKeccak0 then
+  Result := TKeccakDefHash(CreateByFunction(HashFunction))
+else
+  raise ESHA3InvalidHashFunction.Create('BCF_CreateByFunction: Keccak0 not allowed here.');
+end;
+
+//------------------------------------------------------------------------------
+
+Function BCF_CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKeccakDefHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+If HashFunction <> fnKeccak0 then
+  Result := TKeccakDefHash(CreateFromByFunction(HashFunction,Hash))
+else
+  raise ESHA3InvalidHashFunction.Create('BCF_CreateFromByFunction: Keccak0 not allowed here.');
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function BCF_CreateFromByFunction(Keccak: TKeccak): TKeccakDefHash; overload;{$IFDEF CanInline} inline; {$ENDIF}
+begin
+Result := BCF_CreateFromByFunction(Keccak.HashFunction,Keccak);
+end;
+
+{-------------------------------------------------------------------------------
+    Auxiliary functions - public functions
+-------------------------------------------------------------------------------}
+
+Function ClassByFunction(HashFunction: TKeccakFunction): TKeccakHashClass;
+begin
+case HashFunction of
+  fnKeccak0:    Result := TKeccak0Hash;
+  fnKeccak224:  Result := TKeccak224Hash;
+  fnKeccak256:  Result := TKeccak256Hash;
+  fnKeccak384:  Result := TKeccak384Hash;
+  fnKeccak512:  Result := TKeccak512Hash;
+  fnKeccakC:    Result := TKeccakCHash;
+  fnSHA3_224:   Result := TSHA3_224Hash;
+  fnSHA3_256:   Result := TSHA3_256Hash;
+  fnSHA3_384:   Result := TSHA3_384Hash;
+  fnSHA3_512:   Result := TSHA3_512Hash;
+  fnSHAKE128:   Result := TSHAKE128Hash;
+  fnSHAKE256:   Result := TSHAKE256Hash;
+else
+  raise ESHA3InvalidHashFunction.CreateFmt('ClassByFunction: Invalid hash function (%d)',[Ord(HashFunction)]);
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CreateByFunction(HashFunction: TKeccakFunction): TKeccakHash;
+begin
+Result := ClassByFunction(HashFunction).Create;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccakHash): TKeccakHash;
+begin
+Result := ClassByFunction(HashFunction).CreateAndInitFrom(Hash);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CreateFromByFunction(HashFunction: TKeccakFunction; Hash: TKeccak): TKeccakHash;
+begin
+Result := ClassByFunction(HashFunction).CreateAndInitFrom(Hash);
+end;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Function CreateFromByFunction(Keccak: TKeccak): TKeccakHash;
+begin
+Result := CreateFromByFunction(Keccak.HashFunction,Keccak);
 end;
 
 {-------------------------------------------------------------------------------
@@ -707,7 +932,7 @@ const
     {X = 3} (28,55,25,21,56),
     {X = 4} (27,20,39, 8,14));
 
-  KECCAK_DEFAULT_CAPACITY = 576;
+  KECCAK_DEFAULT_CAPACITY = 9 * 8 * SizeOf(TKeccakWord);  // 576
 
 {===============================================================================
     TKeccakHash - class implementation
@@ -716,60 +941,59 @@ const
     TKeccakHash - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TKeccakHash.SetHashBits(Value: UInt32);
-begin
-If ((Value mod 8) = 0) and (Value < (25 * 8 * SizeOf(TKeccakWord){1600})) then
-  begin
-    fHashBits := Value;
-    fCapacity := CapacityFromHashBits(fHashBits);
-    fBlockSize := Bitrate div 8;
-  end
-else raise ESHA3InvalidBits.CreateFmt('TKeccakHash.SetHashBits: Invalid hash bits (%d).',[Value]);
-end;
-
-//------------------------------------------------------------------------------
-
 Function TKeccakHash.GetBitrate: UInt32;
 begin
-Result := (25 * 8 * SizeOf(TKeccakWord){1600}) - fCapacity;
+Result := PermutationWidth - fCapacity;
 end;
 
 //------------------------------------------------------------------------------
 
-class Function TKeccakHash.HashBufferToLE(HashBuffer: TKeccak_Variable): TKeccak_Variable;
+Function TKeccakHash.GetHashBuffer: TKeccakVar;
+begin
+SetLength(Result,0);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakHash.SetHashBuffer(HashBuffer: TKeccakVar);
+begin
+If Length(HashBuffer) <> 0 then
+  raise ESHA3IncompatibleSize.CreateFmt('TKeccakHash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakHash.HashBufferToLE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
 Result := HashBuffer;
 end;
 
 //------------------------------------------------------------------------------
 
-class Function TKeccakHash.HashBufferToBE(HashBuffer: TKeccak_Variable): TKeccak_Variable;
+class Function TKeccakHash.HashBufferToBE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
 Result := HashBuffer;
 end;
  
 //------------------------------------------------------------------------------
 
-class Function TKeccakHash.HashBufferFromLE(HashBuffer: TKeccak_Variable): TKeccak_Variable;
+class Function TKeccakHash.HashBufferFromLE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
 Result := HashBuffer;
 end;
  
 //------------------------------------------------------------------------------
 
-class Function TKeccakHash.HashBufferFromBE(HashBuffer: TKeccak_Variable): TKeccak_Variable;
+class Function TKeccakHash.HashBufferFromBE(HashBuffer: TKeccakVar): TKeccakVar;
 begin
 Result := HashBuffer;
 end;
 
 //------------------------------------------------------------------------------
 
-class Function TKeccakHash.CapacityFromHashBits(Bits: UInt32): UInt32;
+class Function TKeccakHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
-If (Bits > 0) and (Bits < (25 * 4 * SizeOf(TKeccakWord){800})) then
-  Result := Bits * 2 {$message '?!?'}
-else
-  Result := KECCAK_DEFAULT_CAPACITY;
+Result := KECCAK_DEFAULT_CAPACITY;
 end;
 
 //------------------------------------------------------------------------------
@@ -777,21 +1001,6 @@ end;
 class Function TKeccakHash.PaddingByte: UInt8;
 begin
 Result := $01;  // keccak padding (pad10*1)
-end;
-
-//------------------------------------------------------------------------------
-
-Function TKeccakHash.GetHashBuffer: TKeccak_Variable;
-begin
-SetLength(Result,0);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TKeccakHash.SetHashBuffer(HashBuffer: TKeccak_Variable);
-begin
-If Length(HashBuffer) <> 0 then
-  raise ESHA3IncompatibleSize.CreateFmt('TKeccakHash.SetHashBuffer: Incompatible hash size (%d).',[Length(HashBuffer)]);
 end;
 
 //------------------------------------------------------------------------------
@@ -903,19 +1112,21 @@ end;
 
 procedure TKeccakHash.Squeeze;
 var
-  Temp: TKeccak_Variable;
+  Temp: TKeccakVar;
 begin
 If HashSize > 0 then
   begin
     SetLength(Temp,HashSize);
-    SqueezeInternal(Temp[0],HashSize);
+    SqueezeTo(Temp[0],HashSize);
     SetHashBuffer(Temp);
   end;
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TKeccakHash.SqueezeInternal(var Buffer; Size: TMemSize);
+procedure TKeccakHash.SqueezeTo(var Buffer; Size: TMemSize);
+var
+  Offset: PtrUInt;
 
   procedure SqueezeSponge(var Dest; Count: TMemSize);
   {$IFDEF ENDIAN_BIG}
@@ -935,10 +1146,12 @@ procedure TKeccakHash.SqueezeInternal(var Buffer; Size: TMemSize);
 begin
 If Size > 0 then
   begin
+    Offset := 0;
     If Size > fBlockSize then
       while Size > 0 do
         begin
-          SqueezeSponge(Pointer(PtrUInt(@Buffer) + PtrUInt(HashSize) - PtrUInt(Size))^,Min(Size,fBlockSize));
+          SqueezeSponge(Pointer(PtrUInt(@Buffer) + Offset)^,Min(Size,fBlockSize));
+          Inc(Offset,Min(Size,fBlockSize));
           Dec(Size,Min(Size,fBlockSize));
           Permute;
         end
@@ -961,6 +1174,7 @@ var
   i:    Integer;
   Buff: TKeccakSpongeOverlay absolute Block;
 begin
+{$message 'hey, blocks must be multiple of words if this has to work correctly..'}
 For i := 0 to Pred(fBlockSize div 8) do
   TKeccakSpongeOverlay(fSponge)[i] := TKeccakSpongeOverlay(fSponge)[i] xor
     {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(Buff[i]);
@@ -1003,6 +1217,19 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TKeccakHash.InitHashBits(Value: UInt32);
+begin
+If (Value mod 8) = 0 then
+  begin
+    fHashBits := Value;
+    fCapacity := CapacityFromHashBits(fHashBits);
+    fBlockSize := Bitrate div 8;
+  end
+else raise ESHA3InvalidHashBits.CreateFmt('TKeccakHash.InitHashBits: Invalid hash bits (%d).',[Value]);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TKeccakHash.Initialize;
 begin
 inherited;
@@ -1012,6 +1239,20 @@ end;
 {-------------------------------------------------------------------------------
     TKeccakHash - public methods
 -------------------------------------------------------------------------------}
+
+class Function TKeccakHash.LaneSize: UInt32;
+begin
+Result := SizeOf(TKeccakWord) * 8;  // 64, with of the keccak word
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakHash.PermutationWidth: UInt32;
+begin
+Result := 25 * LaneSize;  // 1600, size of the sponge in bits
+end;
+
+//------------------------------------------------------------------------------
 
 Function TKeccakHash.HashSize: TMemSize;
 begin
@@ -1052,14 +1293,14 @@ end;
 
 Function TKeccakHash.Compare(Hash: THashBase): Integer;
 var
-  A,B:  TKeccak_Variable;
+  A,B:  TKeccakVar;
   i:    Integer;
 begin
 If Hash is Self.ClassType then
   begin
     Result := 0;
     A := GetHashBuffer;
-    B := TKeccakHash(Hash).GetHashBuffer;
+    B := TKeccakHash(Hash).GetHashBuffer; // calling protected method, but meh...
     If Length(A) = Length(B) then
       begin
         For i := Low(A) to High(A) do
@@ -1083,7 +1324,7 @@ end;
 
 Function TKeccakHash.AsString: String;
 var
-  Temp: TKeccak_Variable;
+  Temp: TKeccakVar;
   i:    Integer;
 begin
 Temp := GetHashBuffer;
@@ -1103,27 +1344,30 @@ end;
 
 procedure TKeccakHash.FromString(const Str: String);
 var
-  TempStr:  String;
-  i:        Integer;
-  Temp:     TKeccak_Variable;
+  Temp: TKeccakVar;
+  i:    Integer;  
 begin
-If Length(Str) < Integer(HashSize * 2) then
-  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
-else If Length(Str) > Integer(HashSize * 2) then
-  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
-else
-  TempStr := Str;
-SetLength(Temp,HashSize);
+SetLength(Temp,Length(Str) div 2);
 For i := Low(Temp) to High(Temp) do
-  Temp[i] := UInt8(StrToInt('$' + Copy(TempStr,(i * 2) + 1,2)));
+  Temp[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
 SetHashBuffer(Temp);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakHash.FromStringDef(const Str: String; const Default: TKeccak);
+begin
+If (Default.HashFunction = HashFunction) then
+  inherited FromStringDef(Str,Default)
+else
+  raise ESHA3IncompatibleFunction.CreateFmt('TKeccakHash.FromStringDef: Incompatible function (%d).',[Ord(Default.HashFunction)]);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TKeccakHash.SaveToStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
-  Temp: TKeccak_Variable;
+  Temp: TKeccakVar;
 begin
 case Endianness of
   heSystem: Temp := {$IFDEF ENDIAN_BIG}HashBufferToBE{$ELSE}HashBufferToLE{$ENDIF}(GetHashBuffer);
@@ -1134,19 +1378,19 @@ else
   Temp := GetHashBuffer;
 end;
 If Length(Temp) > 0 then
-  Stream.WriteBuffer(Temp[0],HashSize);
+  Stream.WriteBuffer(Temp[0],Length(Temp));
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TKeccakHash.LoadFromStream(Stream: TStream; Endianness: THashEndianness = heDefault);
 var
-  Temp: TKeccak_Variable;
+  Temp: TKeccakVar;
 begin
 SetLength(Temp,HashSize);
 If Length(Temp) > 0 then
   begin
-    Stream.ReadBuffer(Temp[0],HashSize);
+    Stream.ReadBuffer(Temp[0],Length(Temp));
     case Endianness of
       heSystem: SetHashBuffer({$IFDEF ENDIAN_BIG}HashBufferFromBE{$ELSE}HashBufferFromLE{$ENDIF}(Temp));
       heLittle: SetHashBuffer(HashBufferFromLE(Temp));
@@ -1157,7 +1401,6 @@ If Length(Temp) > 0 then
     end;
   end;
 end;
-
 
 {-------------------------------------------------------------------------------
 ================================================================================
@@ -1173,7 +1416,7 @@ end;
 
 procedure TKeccak0Hash.Initialize;
 begin
-SetHashBits(0);
+InitHashBits(0);
 inherited;
 end;
 
@@ -1190,47 +1433,103 @@ end;
 
 class Function TKeccak0Hash.HashFunction: TKeccakFunction;
 begin
-Result := fnKECCAK0;
+Result := fnKeccak0;
+end;
+
+//------------------------------------------------------------------------------
+
+constructor TKeccak0Hash.CreateAndInitFrom(Hash: TKeccak);
+begin
+CreateAndInit;
+// this clas does not have a true hash, drop the Hash parameter
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccak0Hash.Permute;
+begin
+inherited Permute;
 end;
 
 //------------------------------------------------------------------------------
 
 procedure TKeccak0Hash.Squeeze(var Buffer; Size: TMemSize);
 begin
-SqueezeInternal(Buffer,Size);
+SqueezeTo(Buffer,Size);
 end;
 
 
 {-------------------------------------------------------------------------------
 ================================================================================
-                                 TKeccakDefinedHash
+                                 TKeccakDefHash
 ================================================================================
 -------------------------------------------------------------------------------}
 {===============================================================================
-    TKeccakDefinedHash - class implementation
+    TKeccakDefHash - class declaration
+===============================================================================}
+
+Function TKeccakDefHash.GetKeccak: TKeccak;
+begin
+Result.HashFunction := HashFunction;
+Result.HashBits := fHashBits;
+If HashSize > 0 then
+  Result.HashData := Copy(GetHashBuffer)
+else
+  SetLength(Result.HashData,0);
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                 TKeccakFixHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakFixHash - class implementation
 ===============================================================================}
 {-------------------------------------------------------------------------------
-    TKeccakDefinedHash - public methods
+    TKeccakFixHash - protected methods
 -------------------------------------------------------------------------------}
 
-procedure TKeccakDefinedHash.SetHashBits(Value: UInt32);
+class Function TKeccakFixHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
-If Value > 0 then
-  inherited SetHashBits(Value)
+If (HashBits > 0) and ((HashBits * 2) < PermutationWidth) then
+  Result := HashBits * 2 {$message '!?'}
 else
-  raise ESHA3InvalidBits.CreateFmt('TKeccakDefinedHash.SetHashBits: Invalid hash bits (%d).',[Value]);
+  raise ESHA3InvalidHashBits.CreateFmt('TKeccakFixHash.CapacityFromHashBits: Invalid hash bits (%d).',[HashBits]);
+end;
+
+{-------------------------------------------------------------------------------
+    TKeccakFixHash - public methods
+-------------------------------------------------------------------------------}
+
+procedure TKeccakFixHash.FromString(const Str: String);
+var
+  TempStr:  String;
+begin
+If Length(Str) < Integer(HashSize * 2) then
+  TempStr := StringOfChar('0',Integer(HashSize * 2) - Length(Str)) + Str
+else If Length(Str) > Integer(HashSize * 2) then
+  TempStr := Copy(Str,Length(Str) - Pred(Integer(HashSize * 2)),Integer(HashSize * 2))
+else
+  TempStr := Str;
+inherited FromString(TempStr);
 end;
 
 //------------------------------------------------------------------------------
 
-Function TKeccakDefinedHash.GetKeccak: TKeccak;
+procedure TKeccakFixHash.FromStringDef(const Str: String; const Default: TKeccak);
 begin
-Result.HashFunction := HashFunction;
-Result.HashBits := fHashBits;
-If Result.HashBits <> 0 then
-  Result.HashData := Copy(GetHashBuffer)
-else
-  SetLength(Result.HashData,0);
+If Default.HashBits = fHashBits then 
+  begin
+    If UInt32(Length(Default.HashData)) = HashSize then
+      begin
+        inherited FromStringDef(Str,Default); // also checks the hash function
+        If not TryFromString(Str) then
+          SetHashBuffer(Default.HashData);
+      end
+    else raise ESHA3IncompatibleSize.CreateFmt('TKeccakFixHash.FromStringDef: Incompatible size (%d).',[Length(Default.HashData)]);
+  end
+else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccakFixHash.FromStringDef: Incompatible hash bits (%d).',[Default.HashBits]);
 end;
 
 
@@ -1246,7 +1545,7 @@ end;
     TKeccak224Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TKeccak224Hash.GetHashBuffer: TKeccak_Variable;
+Function TKeccak224Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fKeccak224,Result[0],HashSize);
@@ -1254,7 +1553,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TKeccak224Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TKeccak224Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fKeccak224,HashSize)
@@ -1266,7 +1565,7 @@ end;
 
 procedure TKeccak224Hash.Initialize;
 begin
-SetHashBits(224);
+InitHashBits(224);
 inherited;
 end;
 
@@ -1304,14 +1603,14 @@ end;
 
 class Function TKeccak224Hash.HashName: String;
 begin
-Result := 'Keccak[224]';
+Result := 'Keccak224';
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TKeccak224Hash.HashFunction: TKeccakFunction;
 begin
-Result := fnKECCAK224;
+Result := fnKeccak224;
 end;
 
 //------------------------------------------------------------------------------
@@ -1332,10 +1631,14 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then  // this implies equal hash bits
-      Move(Hash.HashData[0],fKeccak224,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TKeccak224Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fKeccak224,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TKeccak224Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccak224Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TKeccak224Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
@@ -1346,6 +1649,14 @@ constructor TKeccak224Hash.CreateAndInitFrom(Hash: TKeccak224);
 begin
 CreateAndInit;
 fKeccak224 := Hash;
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccak224Hash.Init;
+begin
+inherited;
+FillChar(fKeccak224,SizeOf(TKeccak224),0);
 end;
 
 //------------------------------------------------------------------------------
@@ -1370,7 +1681,7 @@ end;
     TKeccak256Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TKeccak256Hash.GetHashBuffer: TKeccak_Variable;
+Function TKeccak256Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fKeccak256,Result[0],HashSize);
@@ -1378,7 +1689,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TKeccak256Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TKeccak256Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fKeccak256,HashSize)
@@ -1390,7 +1701,7 @@ end;
 
 procedure TKeccak256Hash.Initialize;
 begin
-SetHashBits(256);
+InitHashBits(256);
 inherited;
 end;
 
@@ -1428,14 +1739,14 @@ end;
 
 class Function TKeccak256Hash.HashName: String;
 begin
-Result := 'Keccak[256]';
+Result := 'Keccak256';
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TKeccak256Hash.HashFunction: TKeccakFunction;
 begin
-Result := fnKECCAK256;
+Result := fnKeccak256;
 end;
 
 //------------------------------------------------------------------------------
@@ -1456,10 +1767,14 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then 
-      Move(Hash.HashData[0],fKeccak256,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TKeccak256Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fKeccak256,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TKeccak256Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccak256Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TKeccak256Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
@@ -1474,9 +1789,16 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TKeccak256Hash.Init;
+begin
+inherited;
+FillChar(fKeccak256,SizeOf(TKeccak256),0);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TKeccak256Hash.FromStringDef(const Str: String; const Default: TKeccak256);
 begin
-inherited FromStringDef(Str,Default);
 If not TryFromString(Str) then
   fKeccak256 := Default;
 end;
@@ -1494,7 +1816,7 @@ end;
     TKeccak384Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TKeccak384Hash.GetHashBuffer: TKeccak_Variable;
+Function TKeccak384Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fKeccak384,Result[0],HashSize);
@@ -1502,7 +1824,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TKeccak384Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TKeccak384Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fKeccak384,HashSize)
@@ -1514,7 +1836,7 @@ end;
 
 procedure TKeccak384Hash.Initialize;
 begin
-SetHashBits(384);
+InitHashBits(384);
 inherited;
 end;
 
@@ -1552,14 +1874,14 @@ end;
 
 class Function TKeccak384Hash.HashName: String;
 begin
-Result := 'Keccak[384]';
+Result := 'Keccak384';
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TKeccak384Hash.HashFunction: TKeccakFunction;
 begin
-Result := fnKECCAK384;
+Result := fnKeccak384;
 end;
 
 //------------------------------------------------------------------------------
@@ -1580,10 +1902,14 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then 
-      Move(Hash.HashData[0],fKeccak384,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TKeccak384Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fKeccak384,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TKeccak384Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccak384Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TKeccak384Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
@@ -1598,9 +1924,16 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TKeccak384Hash.Init;
+begin
+inherited;
+FillChar(fKeccak384,SizeOf(TKeccak384),0);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TKeccak384Hash.FromStringDef(const Str: String; const Default: TKeccak384);
 begin
-inherited FromStringDef(Str,Default);
 If not TryFromString(Str) then
   fKeccak384 := Default;
 end;
@@ -1618,7 +1951,7 @@ end;
     TKeccak512Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TKeccak512Hash.GetHashBuffer: TKeccak_Variable;
+Function TKeccak512Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fKeccak512,Result[0],HashSize);
@@ -1626,7 +1959,7 @@ end;
 
 //------------------------------------------------------------------------------
 
-procedure TKeccak512Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TKeccak512Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fKeccak512,HashSize)
@@ -1638,7 +1971,7 @@ end;
 
 procedure TKeccak512Hash.Initialize;
 begin
-SetHashBits(512);
+InitHashBits(512);
 inherited;
 end;
 
@@ -1676,14 +2009,14 @@ end;
 
 class Function TKeccak512Hash.HashName: String;
 begin
-Result := 'Keccak[512]';
+Result := 'Keccak512';
 end;
 
 //------------------------------------------------------------------------------
 
 class Function TKeccak512Hash.HashFunction: TKeccakFunction;
 begin
-Result := fnKECCAK512;
+Result := fnKeccak512;
 end;
 
 //------------------------------------------------------------------------------
@@ -1704,10 +2037,14 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then 
-      Move(Hash.HashData[0],fKeccak512,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TKeccak512Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fKeccak512,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TKeccak512Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TKeccak512Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TKeccak512Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
@@ -1722,149 +2059,18 @@ end;
 
 //------------------------------------------------------------------------------
 
+procedure TKeccak512Hash.Init;
+begin
+inherited;
+FillChar(fKeccak512,SizeOf(TKeccak512),0);
+end;
+
+//------------------------------------------------------------------------------
+
 procedure TKeccak512Hash.FromStringDef(const Str: String; const Default: TKeccak512);
 begin
-inherited FromStringDef(Str,Default);
 If not TryFromString(Str) then
   fKeccak512 := Default;
-end;
-
-
-{-------------------------------------------------------------------------------
-================================================================================
-                                  TKeccak_CHash
-================================================================================
--------------------------------------------------------------------------------}
-{===============================================================================
-    TKeccak_CHash - class implementation
-===============================================================================}
-{-------------------------------------------------------------------------------
-    TKeccak_CHash - protected methods
--------------------------------------------------------------------------------}
-
-procedure TKeccak_CHash.SetHashBits(Value: UInt32);
-begin
-inherited SetHashBits(Value);
-ReallocMem(fTempBlock,fBlockSize);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TKeccak_CHash.GetHashBuffer: TKeccak_Variable;
-begin
-Result := Copy(fKeccak_c);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TKeccak_CHash.SetHashBuffer(HashBuffer: TKeccak_Variable);
-begin
-If UInt32(Length(HashBuffer)) = HashSize then
-  fKeccak_c := Copy(HashBuffer)
-else
-  raise ESHA3IncompatibleSize.CreateFmt('TKeccak_CHash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
-end;
-
-//------------------------------------------------------------------------------
-
-Function TKeccak_CHash.GetKeccak_c: TKeccak_c;
-begin
-Result := Copy(fKeccak_c);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure TKeccak_CHash.Initialize;
-begin
-SetHashBits(KECCAK_DEFAULT_CAPACITY);
-inherited;
-end;
-
-{-------------------------------------------------------------------------------
-    TKeccak_CHash - public methods
--------------------------------------------------------------------------------}
-
-class Function TKeccak_CHash.Keccak_cToLE(Keccak_c: TKeccak_c): TKeccak_c;
-begin
-Result := Copy(Keccak_c);
-end;
-  
-//------------------------------------------------------------------------------
-
-class Function TKeccak_CHash.Keccak_cToBE(Keccak_c: TKeccak_c): TKeccak_c;
-begin
-Result := Copy(Keccak_c);
-end;
-  
-//------------------------------------------------------------------------------
-
-class Function TKeccak_CHash.Keccak_cFromLE(Keccak_c: TKeccak_c): TKeccak_c;
-begin
-Result := Copy(Keccak_c);
-end;
- 
-//------------------------------------------------------------------------------
-
-class Function TKeccak_CHash.Keccak_cFromBE(Keccak_c: TKeccak_c): TKeccak_c;
-begin
-Result := Copy(Keccak_c);
-end;
-
-//------------------------------------------------------------------------------
-
-class Function TKeccak_CHash.HashName: String;
-begin
-Result := 'Keccak[c]'
-end;
-
-//------------------------------------------------------------------------------
-
-class Function TKeccak_CHash.HashFunction: TKeccakFunction;
-begin
-Result := fnKECCAK_c;
-end;
- 
-//------------------------------------------------------------------------------
-
-constructor TKeccak_CHash.CreateAndInitFrom(Hash: THashBase);
-begin
-inherited CreateAndInitFrom(Hash);
-If Hash is TKeccak_CHash then
-  fKeccak_c := TKeccak_CHash(Hash).Keccak_c // no need to call copy
-else
-  raise ESHA3IncompatibleClass.CreateFmt('TKeccak_CHash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
-end;
- 
-//------------------------------------------------------------------------------
-
-constructor TKeccak_CHash.CreateAndInitFrom(Hash: TKeccak);
-begin
-CreateAndInit;
-If Hash.HashFunction = HashFunction then
-  begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then
-      fKeccak_c := Copy(Hash.HashData)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TKeccak_CHash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
-  end
-else raise ESHA3IncompatibleFunction.CreateFmt('TKeccak_CHash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
-end;
-  
-//------------------------------------------------------------------------------
-
-constructor TKeccak_CHash.CreateAndInitFrom(Hash: TKeccak_c);
-begin
-CreateAndInit;
-fKeccak_c := Copy(Hash);
-end;
-   
-//------------------------------------------------------------------------------
-
-procedure TKeccak_CHash.FromStringDef(const Str: String; const Default: TKeccak_c);
-begin
-inherited FromStringDef(Str,Default);
-If not TryFromString(Str) then
-  fKeccak_c := Copy(Default);
 end;
 
 
@@ -1880,16 +2086,16 @@ end;
     TSHA3Hash - protected methods
 -------------------------------------------------------------------------------}
 
-class Function TSHA3Hash.CapacityFromHashBits(Bits: UInt32): UInt32;
+class Function TSHA3Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
-If (Bits > 0) and (Bits < (25 * 4 * SizeOf(TKeccakWord){800})) then
-  Result := Bits * 2
+If (HashBits > 0) and ((HashBits * 2) < PermutationWidth) then
+  Result := HashBits * 2
 else
-  raise ESHA3InvalidBits.CreateFmt('TSHA3Hash.CapacityFromHashBits: Invalid hash bits (%d).',[Bits]);
+  raise ESHA3InvalidHashBits.CreateFmt('TSHA3Hash.CapacityFromHashBits: Invalid hash bits (%d).',[HashBits]);
 end;
    
 //------------------------------------------------------------------------------
-
+ 
 class Function TSHA3Hash.PaddingByte: UInt8;
 begin
 Result := $06;  // SHA3 padding (M || 01 || pad10*1)
@@ -1908,7 +2114,7 @@ end;
     TSHA3_224Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TSHA3_224Hash.GetHashBuffer: TKeccak_Variable;
+Function TSHA3_224Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fSHA3_224,Result[0],HashSize);
@@ -1916,7 +2122,7 @@ end;
    
 //------------------------------------------------------------------------------
 
-procedure TSHA3_224Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TSHA3_224Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fSHA3_224,HashSize)
@@ -1928,7 +2134,7 @@ end;
 
 procedure TSHA3_224Hash.Initialize;
 begin
-SetHashBits(224);
+InitHashBits(224);
 inherited;
 end;
 
@@ -1994,14 +2200,18 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then
-      Move(Hash.HashData[0],fSHA3_224,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TSHA3_224Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fSHA3_224,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TSHA3_224Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TSHA3_224Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TSHA3_224Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
-   
+
 //------------------------------------------------------------------------------
 
 constructor TSHA3_224Hash.CreateAndInitFrom(Hash: TSHA3_224);
@@ -2009,7 +2219,15 @@ begin
 CreateAndInit;
 fSHA3_224 := Hash;
 end;
-     
+
+//------------------------------------------------------------------------------
+
+procedure TSHA3_224Hash.Init;
+begin
+inherited;
+FillChar(fSHA3_224,SizeOf(TSHA3_224),0);
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TSHA3_224Hash.FromStringDef(const Str: String; const Default: TSHA3_224);
@@ -2032,7 +2250,7 @@ end;
     TSHA3_256Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TSHA3_256Hash.GetHashBuffer: TKeccak_Variable;
+Function TSHA3_256Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fSHA3_256,Result[0],HashSize);
@@ -2040,7 +2258,7 @@ end;
    
 //------------------------------------------------------------------------------
 
-procedure TSHA3_256Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TSHA3_256Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fSHA3_256,HashSize)
@@ -2052,7 +2270,7 @@ end;
 
 procedure TSHA3_256Hash.Initialize;
 begin
-SetHashBits(256);
+InitHashBits(256);
 inherited;
 end;
 
@@ -2118,14 +2336,18 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then
-      Move(Hash.HashData[0],fSHA3_256,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TSHA3_256Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fSHA3_256,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TSHA3_256Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TSHA3_256Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TSHA3_256Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
-   
+
 //------------------------------------------------------------------------------
 
 constructor TSHA3_256Hash.CreateAndInitFrom(Hash: TSHA3_256);
@@ -2133,7 +2355,15 @@ begin
 CreateAndInit;
 fSHA3_256 := Hash;
 end;
-     
+
+//------------------------------------------------------------------------------
+
+procedure TSHA3_256Hash.Init;
+begin
+inherited;
+FillChar(fSHA3_256,SizeOf(TSHA3_256),0);
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TSHA3_256Hash.FromStringDef(const Str: String; const Default: TSHA3_256);
@@ -2156,7 +2386,7 @@ end;
     TSHA3_384Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TSHA3_384Hash.GetHashBuffer: TKeccak_Variable;
+Function TSHA3_384Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fSHA3_384,Result[0],HashSize);
@@ -2164,7 +2394,7 @@ end;
    
 //------------------------------------------------------------------------------
 
-procedure TSHA3_384Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TSHA3_384Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fSHA3_384,HashSize)
@@ -2176,7 +2406,7 @@ end;
 
 procedure TSHA3_384Hash.Initialize;
 begin
-SetHashBits(384);
+InitHashBits(384);
 inherited;
 end;
 
@@ -2242,14 +2472,18 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then
-      Move(Hash.HashData[0],fSHA3_384,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TSHA3_384Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fSHA3_384,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TSHA3_384Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TSHA3_384Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TSHA3_384Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
-   
+
 //------------------------------------------------------------------------------
 
 constructor TSHA3_384Hash.CreateAndInitFrom(Hash: TSHA3_384);
@@ -2257,7 +2491,15 @@ begin
 CreateAndInit;
 fSHA3_384 := Hash;
 end;
-     
+
+//------------------------------------------------------------------------------
+
+procedure TSHA3_384Hash.Init;
+begin
+inherited;
+FillChar(fSHA3_384,SizeOf(TSHA3_384),0);
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TSHA3_384Hash.FromStringDef(const Str: String; const Default: TSHA3_384);
@@ -2280,7 +2522,7 @@ end;
     TSHA3_512Hash - protected methods
 -------------------------------------------------------------------------------}
 
-Function TSHA3_512Hash.GetHashBuffer: TKeccak_Variable;
+Function TSHA3_512Hash.GetHashBuffer: TKeccakVar;
 begin
 SetLength(Result,HashSize);
 Move(fSHA3_512,Result[0],HashSize);
@@ -2288,7 +2530,7 @@ end;
    
 //------------------------------------------------------------------------------
 
-procedure TSHA3_512Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+procedure TSHA3_512Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
 If UInt32(Length(HashBuffer)) = HashSize then
   Move(HashBuffer[0],fSHA3_512,HashSize)
@@ -2300,7 +2542,7 @@ end;
 
 procedure TSHA3_512Hash.Initialize;
 begin
-SetHashBits(512);
+InitHashBits(512);
 inherited;
 end;
 
@@ -2366,14 +2608,18 @@ begin
 CreateAndInit;
 If Hash.HashFunction = HashFunction then
   begin
-    If (UInt32(Length(Hash.HashData)) = HashSize) then
-      Move(Hash.HashData[0],fSHA3_512,HashSize)
-    else
-      raise ESHA3IncompatibleSize.CreateFmt('TSHA3_512Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+    If Hash.HashBits = fHashBits then
+      begin
+        If (UInt32(Length(Hash.HashData)) = HashSize) then
+          Move(Hash.HashData[0],fSHA3_512,HashSize)
+        else
+          raise ESHA3IncompatibleSize.CreateFmt('TSHA3_512Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+      end
+    else raise ESHA3IncompatibleHashBits.CreateFmt('TSHA3_512Hash.CreateAndInitFrom: Incompatible hash bits (%d).',[Hash.HashBits]);
   end
 else raise ESHA3IncompatibleFunction.CreateFmt('TSHA3_512Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
 end;
-   
+
 //------------------------------------------------------------------------------
 
 constructor TSHA3_512Hash.CreateAndInitFrom(Hash: TSHA3_512);
@@ -2381,7 +2627,15 @@ begin
 CreateAndInit;
 fSHA3_512 := Hash;
 end;
-     
+
+//------------------------------------------------------------------------------
+
+procedure TSHA3_512Hash.Init;
+begin
+inherited;
+FillChar(fSHA3_512,SizeOf(TSHA3_512),0);
+end;
+
 //------------------------------------------------------------------------------
 
 procedure TSHA3_512Hash.FromStringDef(const Str: String; const Default: TSHA3_512);
@@ -2389,6 +2643,223 @@ begin
 inherited FromStringDef(Str,Default);
 If not TryFromString(Str) then
   fSHA3_512 := Default;
+end;
+
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                 TKeccakVarHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakVarHash - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TKeccakVarHash - protected methods
+-------------------------------------------------------------------------------}
+
+class Function TKeccakVarHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
+begin
+If HashBits > 0 then
+  Result := KECCAK_DEFAULT_CAPACITY
+else
+  raise ESHA3InvalidHashBits.CreateFmt('TKeccakVarHash.CapacityFromHashBits: Invalid hash bits (%d).',[HashBits]);
+end;
+
+{-------------------------------------------------------------------------------
+    TKeccakVarHash - public methods
+-------------------------------------------------------------------------------}
+
+procedure TKeccakVarHash.FromStringDef(const Str: String; const Default: TKeccak);
+begin
+If (Length(Str) div 2) = Length(Default.HashData) then
+  begin
+    inherited FromStringDef(Str,Default);
+    If not TryFromString(Str) then
+      SetHashBuffer(Default.HashData);
+  end
+else raise ESHA3InvalidSize.CreateFmt('TKeccakVarHash.FromStringDef: Size mismatch (%d, %d).',[Length(Str) div 2,Length(Default.HashData)]);
+end;
+
+{-------------------------------------------------------------------------------
+================================================================================
+                                  TKeccakCHash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TKeccakCHash - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TKeccakCHash - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TKeccakCHash.SetHashBits(Value: UInt32);
+begin
+If ((Value mod 8) = 0) and (Value > 0) then
+  begin
+    fHashBits := Value;
+    SetLength(fKeccakC,HashSize);
+    FillChar(fKeccakC[0],Length(fKeccakC),0);
+  end
+else raise ESHA3InvalidHashBits.CreateFmt('TKeccakCHash.SetHashBits: Invalid hash bits (%d).',[Value]);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakCHash.SetCapacity(Value: UInt32);
+begin
+If ((Value mod 8) = 0) and (Value > 0) and (Value < PermutationWidth) then
+  begin
+    fCapacity := Value;
+    fBlockSize := Bitrate div 8;
+    ReallocMem(fTempBlock,fBlockSize);
+  end
+else raise ESHA3InvalidCapacity.CreateFmt('TKeccakCHash.SetCapacity: Invalid capacity (%d).',[Value]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TKeccakCHash.GetHashBuffer: TKeccakVar;
+begin
+Result := Copy(TKeccakVar(fKeccakC));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakCHash.SetHashBuffer(HashBuffer: TKeccakVar);
+begin                                                  
+If (Length(HashBuffer) > 0) then
+  begin
+    SetHashBits(Length(HashBuffer) * 8);
+    fKeccakC := Copy(TKeccakC(HashBuffer));
+  end
+else raise ESHA3IncompatibleSize.CreateFmt('TKeccakCHash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TKeccakCHash.GetKeccakC: TKeccakC;
+begin
+Result := Copy(fKeccakC);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakCHash.Initialize;
+begin
+InitHashBits(256);  // capacity is set to default value
+inherited;
+SetLength(fKeccakC,HashSize);
+end;
+
+{-------------------------------------------------------------------------------
+    TKeccakCHash - public methods
+-------------------------------------------------------------------------------}
+
+class Function TKeccakCHash.KeccakCToLE(KeccakC: TKeccakC): TKeccakC;
+begin
+Result := Copy(KeccakC);
+end;
+  
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.KeccakCToBE(KeccakC: TKeccakC): TKeccakC;
+begin
+Result := Copy(KeccakC);
+end;
+  
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.KeccakCFromLE(KeccakC: TKeccakC): TKeccakC;
+begin
+Result := Copy(KeccakC);
+end;
+ 
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.KeccakCFromBE(KeccakC: TKeccakC): TKeccakC;
+begin
+Result := Copy(KeccakC);
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.HashName: String;
+begin
+Result := 'Keccak[c]'
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.HashFunction: TKeccakFunction;
+begin
+Result := fnKeccakC;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakCHash.MaxCapacity: UInt32;
+begin
+Result := PermutationWidth - 8;
+end;
+ 
+//------------------------------------------------------------------------------
+
+constructor TKeccakCHash.CreateAndInitFrom(Hash: THashBase);
+begin
+inherited CreateAndInitFrom(Hash);
+If Hash is TKeccakCHash then
+  begin
+    SetHashBits(TKeccakCHash(Hash).HashBits);
+    SetCapacity(TKeccakCHash(Hash).Capacity);
+    fKeccakC := TKeccakCHash(Hash).KeccakC;   // no need to call copy
+  end
+else raise ESHA3IncompatibleClass.CreateFmt('TKeccakCHash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
+end;
+ 
+//------------------------------------------------------------------------------
+
+constructor TKeccakCHash.CreateAndInitFrom(Hash: TKeccak);
+begin
+CreateAndInit;
+If Hash.HashFunction = HashFunction then
+  begin
+    SetHashBits(Hash.HashBits); // capacity is left untouched
+    If (UInt32(Length(Hash.HashData)) = HashSize) then
+      fKeccakC := Copy(TKeccakC(Hash.HashData))
+    else
+      raise ESHA3IncompatibleSize.CreateFmt('TKeccakCHash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+  end
+else raise ESHA3IncompatibleFunction.CreateFmt('TKeccakCHash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
+end;
+  
+//------------------------------------------------------------------------------
+
+constructor TKeccakCHash.CreateAndInitFrom(Hash: TKeccakC);
+begin
+CreateAndInit;
+SetHashBuffer(TKeccakVar(Hash));  // also sets bits and others
+end;
+   
+//------------------------------------------------------------------------------
+
+procedure TKeccakCHash.Init;
+begin
+inherited;
+If Length(fKeccakC) > 0 then
+  FillChar(fKeccakC[0],Length(fKeccakC),0);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TKeccakCHash.FromStringDef(const Str: String; const Default: TKeccakC);
+begin
+If (Length(Str) div 2) = Length(Default) then
+  begin
+    If not TryFromString(Str) then
+      SetHashBuffer(TKeccakVar(Default));
+  end
+else raise ESHA3InvalidSize.CreateFmt('TKeccakCHash.FromStringDef: Size mismatch (%d, %d).',[Length(Str) div 2,Length(Default)]);
 end;
 
 
@@ -2403,19 +2874,6 @@ end;
 {-------------------------------------------------------------------------------
     TSHAKEHash - protected methods
 -------------------------------------------------------------------------------}
-
-procedure TSHAKEHash.SetHashBits(Value: UInt32);
-begin
-If (Value mod 8) = 0 then
-  begin
-    fHashBits := Value;
-    fCapacity := CapacityFromHashBits(fHashBits);
-    fBlockSize := Bitrate div 8;
-  end
-else raise ESHA3InvalidBits.CreateFmt('TSHAKEHash.SetHashBits: Invalid hash bits (%d).',[Value]);
-end;
-
-//------------------------------------------------------------------------------
 
 class Function TSHAKEHash.PaddingByte: UInt8;
 begin
@@ -2437,41 +2895,51 @@ end;
 
 procedure TSHAKE128Hash.SetHashBits(Value: UInt32);
 begin
-inherited SetHashBits(Value);
-ReallocMem(fTempBlock,fBlockSize);
+InitHashBits(Value);
+// capacity does not change, no need to reallocate temp block
 SetLength(fSHAKE128,HashSize);
+FillChar(fSHAKE128[0],Length(fSHAKE128),0);
+end;
+//------------------------------------------------------------------------------
+
+class Function TSHAKE128Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
+begin
+Result := 256;  // capacity is static
 end;
 
 //------------------------------------------------------------------------------
 
-class Function TSHAKE128Hash.CapacityFromHashBits(Bits: UInt32): UInt32;
+Function TSHAKE128Hash.GetHashBuffer: TKeccakVar;
 begin
-Result := 256;
+Result := Copy(TKeccakVar(fSHAKE128));
 end;
 
 //------------------------------------------------------------------------------
 
-Function TSHAKE128Hash.GetHashBuffer: TKeccak_Variable;
+procedure TSHAKE128Hash.SetHashBuffer(HashBuffer: TKeccakVar);
 begin
-Result := Copy(TKeccak_Variable(fSHAKE128));
+If (Length(HashBuffer) > 0) then
+  begin
+    SetHashBits(Length(HashBuffer) * 8);
+    fSHAKE128 := Copy(TSHAKE128(HashBuffer));
+  end
+else raise ESHA3IncompatibleSize.CreateFmt('TSHAKE128Hash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
 end;
 
 //------------------------------------------------------------------------------
 
-procedure TSHAKE128Hash.SetHashBuffer(HashBuffer: TKeccak_Variable);
+Function TSHAKE128Hash.GetSHAKE128: TSHAKE128;
 begin
-If UInt32(Length(HashBuffer)) = HashSize then
-  fSHAKE128 := Copy(TSHAKE128(HashBuffer))
-else
-  raise ESHA3IncompatibleSize.CreateFmt('TSHAKE128Hash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
+Result := Copy(fSHAKE128);
 end;
-     
+
 //------------------------------------------------------------------------------
 
 procedure TSHAKE128Hash.Initialize;
 begin
-SetHashBits(128);
+InitHashBits(128);
 inherited;
+SetLength(fSHAKE128,HashSize);
 end;
 
 {-------------------------------------------------------------------------------
@@ -2522,588 +2990,575 @@ end;
 
 constructor TSHAKE128Hash.CreateAndInitFrom(Hash: THashBase);
 begin
-end;  
-     
+inherited CreateAndInitFrom(Hash);
+If Hash is TSHAKE128Hash then
+  begin
+    SetHashBits(TSHAKE128Hash(Hash).HashBits);
+    fSHAKE128 := TSHAKE128Hash(Hash).SHAKE128;
+  end
+else raise ESHA3IncompatibleClass.CreateFmt('TSHAKE128Hash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
 //------------------------------------------------------------------------------
 
 constructor TSHAKE128Hash.CreateAndInitFrom(Hash: TKeccak);
 begin
-end;    
-     
+CreateAndInit;
+If Hash.HashFunction = HashFunction then
+  begin
+    SetHashBits(Hash.HashBits);
+    If (UInt32(Length(Hash.HashData)) = HashSize) then
+      fSHAKE128 := Copy(TSHAKE128(Hash.HashData))
+    else
+      raise ESHA3IncompatibleSize.CreateFmt('TSHAKE128Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+  end
+else raise ESHA3IncompatibleFunction.CreateFmt('TSHAKE128Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
+end;
+
 //------------------------------------------------------------------------------
 
 constructor TSHAKE128Hash.CreateAndInitFrom(Hash: TSHAKE128);
 begin
-end;   
+CreateAndInit;
+SetHashBuffer(TKeccakVar(Hash));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSHAKE128Hash.Init;
+begin
+inherited;
+If Length(fSHAKE128) > 0 then
+  FillChar(fSHAKE128[0],Length(fSHAKE128),0);
+end;
      
 //------------------------------------------------------------------------------
 
 procedure TSHAKE128Hash.FromStringDef(const Str: String; const Default: TSHAKE128);
 begin
-end;
-
-
-
-(*
-{$IFDEF FPC_DisableWarns}
-  {$DEFINE FPCDWM}
-  {$DEFINE W4055:={$WARN 4055 OFF}} // Conversion between ordinals and pointers is not portable
-  {$DEFINE W4056:={$WARN 4056 OFF}} // Conversion between ordinals and pointers is not portable
-  {$PUSH}{$WARN 2005 OFF} // Comment level $1 found
-  {$IF Defined(FPC) and (FPC_FULLVERSION >= 30000)}
-    {$DEFINE W5092:={$WARN 5092 OFF}} // Variable "$1" of a managed type does not seem to be initialized
-  {$ELSE}
-    {$DEFINE W5092:=}
-  {$IFEND}
-  {$POP}
-{$ENDIF}
-
-const
-  RoundConsts: array[0..23] of UInt64 = (
-    UInt64($0000000000000001), UInt64($0000000000008082), UInt64($800000000000808A),
-    UInt64($8000000080008000), UInt64($000000000000808B), UInt64($0000000080000001),
-    UInt64($8000000080008081), UInt64($8000000000008009), UInt64($000000000000008A),
-    UInt64($0000000000000088), UInt64($0000000080008009), UInt64($000000008000000A),
-    UInt64($000000008000808B), UInt64($800000000000008B), UInt64($8000000000008089),
-    UInt64($8000000000008003), UInt64($8000000000008002), UInt64($8000000000000080),
-    UInt64($000000000000800A), UInt64($800000008000000A), UInt64($8000000080008081),
-    UInt64($8000000000008080), UInt64($0000000080000001), UInt64($8000000080008008));
-
-  RotateCoefs: array[0..4,0..4] of UInt8 = ( // first index is X, second Y
-    {X = 0} ( 0,36, 3,41,18),
-    {X = 1} ( 1,44,10,45, 2),
-    {X = 2} (62, 6,43,15,61),
-    {X = 3} (28,55,25,21,56),
-    {X = 4} (27,20,39, 8,14));
-
-type
-  TSHA3Context_Internal = record
-    HashState:      TSHA3State;
-    TransferSize:   UInt32;
-    TransferBuffer: array[0..199] of UInt8;
-  end;
-  PSHA3Context_Internal = ^TSHA3Context_Internal;
-
-//==============================================================================
-
-procedure Permute(var State: TKeccakState);
-var
-  i:    Integer;
-  B:    TKeccakSponge;
-  C,D:  array[0..4] of UInt64;
-begin
-For i := 0 to 23 do // 24 rounds (12 + 2L; where L = log2(64) = 6; 64 is length of sponge word in bits)
+If (Length(Str) div 2) = Length(Default) then
   begin
-    C[0] := State.Sponge[0,0] xor State.Sponge[1,0] xor State.Sponge[2,0] xor State.Sponge[3,0] xor State.Sponge[4,0];
-    C[1] := State.Sponge[0,1] xor State.Sponge[1,1] xor State.Sponge[2,1] xor State.Sponge[3,1] xor State.Sponge[4,1];
-    C[2] := State.Sponge[0,2] xor State.Sponge[1,2] xor State.Sponge[2,2] xor State.Sponge[3,2] xor State.Sponge[4,2];
-    C[3] := State.Sponge[0,3] xor State.Sponge[1,3] xor State.Sponge[2,3] xor State.Sponge[3,3] xor State.Sponge[4,3];
-    C[4] := State.Sponge[0,4] xor State.Sponge[1,4] xor State.Sponge[2,4] xor State.Sponge[3,4] xor State.Sponge[4,4];
-
-    D[0] := C[4] xor ROL(C[1],1);
-    D[1] := C[0] xor ROL(C[2],1);
-    D[2] := C[1] xor ROL(C[3],1);
-    D[3] := C[2] xor ROL(C[4],1);
-    D[4] := C[3] xor ROL(C[0],1);
-
-    State.Sponge[0,0] := State.Sponge[0,0] xor D[0];
-    State.Sponge[0,1] := State.Sponge[0,1] xor D[1];
-    State.Sponge[0,2] := State.Sponge[0,2] xor D[2];
-    State.Sponge[0,3] := State.Sponge[0,3] xor D[3];
-    State.Sponge[0,4] := State.Sponge[0,4] xor D[4];
-    State.Sponge[1,0] := State.Sponge[1,0] xor D[0];
-    State.Sponge[1,1] := State.Sponge[1,1] xor D[1];
-    State.Sponge[1,2] := State.Sponge[1,2] xor D[2];
-    State.Sponge[1,3] := State.Sponge[1,3] xor D[3];
-    State.Sponge[1,4] := State.Sponge[1,4] xor D[4];
-    State.Sponge[2,0] := State.Sponge[2,0] xor D[0];
-    State.Sponge[2,1] := State.Sponge[2,1] xor D[1];
-    State.Sponge[2,2] := State.Sponge[2,2] xor D[2];
-    State.Sponge[2,3] := State.Sponge[2,3] xor D[3];
-    State.Sponge[2,4] := State.Sponge[2,4] xor D[4];
-    State.Sponge[3,0] := State.Sponge[3,0] xor D[0];
-    State.Sponge[3,1] := State.Sponge[3,1] xor D[1];
-    State.Sponge[3,2] := State.Sponge[3,2] xor D[2];
-    State.Sponge[3,3] := State.Sponge[3,3] xor D[3];
-    State.Sponge[3,4] := State.Sponge[3,4] xor D[4];
-    State.Sponge[4,0] := State.Sponge[4,0] xor D[0];
-    State.Sponge[4,1] := State.Sponge[4,1] xor D[1];
-    State.Sponge[4,2] := State.Sponge[4,2] xor D[2];
-    State.Sponge[4,3] := State.Sponge[4,3] xor D[3];
-    State.Sponge[4,4] := State.Sponge[4,4] xor D[4];
-
-    B[0,0] := ROL(State.Sponge[0,0],RotateCoefs[0,0]);
-    B[2,0] := ROL(State.Sponge[0,1],RotateCoefs[1,0]);
-    B[4,0] := ROL(State.Sponge[0,2],RotateCoefs[2,0]);
-    B[1,0] := ROL(State.Sponge[0,3],RotateCoefs[3,0]);
-    B[3,0] := ROL(State.Sponge[0,4],RotateCoefs[4,0]);
-    B[3,1] := ROL(State.Sponge[1,0],RotateCoefs[0,1]);
-    B[0,1] := ROL(State.Sponge[1,1],RotateCoefs[1,1]);
-    B[2,1] := ROL(State.Sponge[1,2],RotateCoefs[2,1]);
-    B[4,1] := ROL(State.Sponge[1,3],RotateCoefs[3,1]);
-    B[1,1] := ROL(State.Sponge[1,4],RotateCoefs[4,1]);
-    B[1,2] := ROL(State.Sponge[2,0],RotateCoefs[0,2]);
-    B[3,2] := ROL(State.Sponge[2,1],RotateCoefs[1,2]);
-    B[0,2] := ROL(State.Sponge[2,2],RotateCoefs[2,2]);
-    B[2,2] := ROL(State.Sponge[2,3],RotateCoefs[3,2]);
-    B[4,2] := ROL(State.Sponge[2,4],RotateCoefs[4,2]);
-    B[4,3] := ROL(State.Sponge[3,0],RotateCoefs[0,3]);
-    B[1,3] := ROL(State.Sponge[3,1],RotateCoefs[1,3]);
-    B[3,3] := ROL(State.Sponge[3,2],RotateCoefs[2,3]);
-    B[0,3] := ROL(State.Sponge[3,3],RotateCoefs[3,3]);
-    B[2,3] := ROL(State.Sponge[3,4],RotateCoefs[4,3]);
-    B[2,4] := ROL(State.Sponge[4,0],RotateCoefs[0,4]);
-    B[4,4] := ROL(State.Sponge[4,1],RotateCoefs[1,4]);
-    B[1,4] := ROL(State.Sponge[4,2],RotateCoefs[2,4]);
-    B[3,4] := ROL(State.Sponge[4,3],RotateCoefs[3,4]);
-    B[0,4] := ROL(State.Sponge[4,4],RotateCoefs[4,4]);
-
-    State.Sponge[0,0] := B[0,0] xor ((not B[0,1]) and B[0,2]);
-    State.Sponge[0,1] := B[0,1] xor ((not B[0,2]) and B[0,3]);
-    State.Sponge[0,2] := B[0,2] xor ((not B[0,3]) and B[0,4]);
-    State.Sponge[0,3] := B[0,3] xor ((not B[0,4]) and B[0,0]);
-    State.Sponge[0,4] := B[0,4] xor ((not B[0,0]) and B[0,1]);
-    State.Sponge[1,0] := B[1,0] xor ((not B[1,1]) and B[1,2]);
-    State.Sponge[1,1] := B[1,1] xor ((not B[1,2]) and B[1,3]);
-    State.Sponge[1,2] := B[1,2] xor ((not B[1,3]) and B[1,4]);
-    State.Sponge[1,3] := B[1,3] xor ((not B[1,4]) and B[1,0]);
-    State.Sponge[1,4] := B[1,4] xor ((not B[1,0]) and B[1,1]);
-    State.Sponge[2,0] := B[2,0] xor ((not B[2,1]) and B[2,2]);
-    State.Sponge[2,1] := B[2,1] xor ((not B[2,2]) and B[2,3]);
-    State.Sponge[2,2] := B[2,2] xor ((not B[2,3]) and B[2,4]);
-    State.Sponge[2,3] := B[2,3] xor ((not B[2,4]) and B[2,0]);
-    State.Sponge[2,4] := B[2,4] xor ((not B[2,0]) and B[2,1]);
-    State.Sponge[3,0] := B[3,0] xor ((not B[3,1]) and B[3,2]);
-    State.Sponge[3,1] := B[3,1] xor ((not B[3,2]) and B[3,3]);
-    State.Sponge[3,2] := B[3,2] xor ((not B[3,3]) and B[3,4]);
-    State.Sponge[3,3] := B[3,3] xor ((not B[3,4]) and B[3,0]);
-    State.Sponge[3,4] := B[3,4] xor ((not B[3,0]) and B[3,1]);
-    State.Sponge[4,0] := B[4,0] xor ((not B[4,1]) and B[4,2]);
-    State.Sponge[4,1] := B[4,1] xor ((not B[4,2]) and B[4,3]);
-    State.Sponge[4,2] := B[4,2] xor ((not B[4,3]) and B[4,4]);
-    State.Sponge[4,3] := B[4,3] xor ((not B[4,4]) and B[4,0]);
-    State.Sponge[4,4] := B[4,4] xor ((not B[4,0]) and B[4,1]);
-
-    State.Sponge[0,0] := State.Sponge[0,0] xor RoundConsts[i];
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-procedure BlockHash(var State: TKeccakState; const Block);
-var
-  i:    Integer;
-  Buff: TKeccakSpongeOverlay absolute Block;
-begin
-For i := 0 to Pred(State.BlockSize shr 3) do
-  TKeccakSpongeOverlay(State.Sponge)[i] := TKeccakSpongeOverlay(State.Sponge)[i] xor Buff[i];
-Permute(State);
-end;
-
-//------------------------------------------------------------------------------
-
-procedure Squeeze(var State: TKeccakState; var Buffer);
-var
-  BytesToSqueeze: UInt32;
-begin
-BytesToSqueeze := State.HashBits shr 3;
-If BytesToSqueeze > State.BlockSize then
-  while BytesToSqueeze > 0 do
-    begin
-    {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-      Move(State.Sponge,Pointer(PtrUInt(@Buffer) + UInt64(State.HashBits shr 3) - BytesToSqueeze)^,Min(BytesToSqueeze,State.BlockSize));
-    {$IFDEF FPCDWM}{$POP}{$ENDIF}
-      Permute(State);
-      Dec(BytesToSqueeze,Min(BytesToSqueeze,State.BlockSize));
-    end
-else Move(State.Sponge,Buffer,BytesToSqueeze);
-end;
-
-//==============================================================================
-
-procedure PrepareHash(State: TSHA3State; out Hash: TSHA3Hash);
-begin
-Hash.HashSize := State.HashSize;
-Hash.HashBits := State.HashBits;
-SetLength(Hash.HashData,Hash.HashBits shr 3);
-end;
-
-//==============================================================================
-
-Function GetBlockSize(HashSize: TKeccakHashSize): UInt32;
-begin
-case HashSize of
-  Keccak224, SHA3_224:  Result := (1600 - (2 * 224)) shr 3;
-  Keccak256, SHA3_256:  Result := (1600 - (2 * 256)) shr 3;
-  Keccak384, SHA3_384:  Result := (1600 - (2 * 384)) shr 3;
-  Keccak512, SHA3_512:  Result := (1600 - (2 * 512)) shr 3;
-  Keccak_b:             Result := (1600 - 576) shr 3;
-  SHAKE128:             Result := (1600 - (2 * 128)) shr 3;
-  SHAKE256:             Result := (1600 - (2 * 256)) shr 3;
-else
-  raise Exception.CreateFmt('GetBlockSize: Unknown hash size (%d).',[Ord(HashSize)]);
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function InitialSHA3State(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3State;
-begin
-Result.HashSize := HashSize;
-case HashSize of
-  Keccak224, SHA3_224:  Result.HashBits := 224;
-  Keccak256, SHA3_256:  Result.HashBits := 256;
-  Keccak384, SHA3_384:  Result.HashBits := 384;
-  Keccak512, SHA3_512:  Result.HashBits := 512;
-  Keccak_b,
-  SHAKE128,
-  SHAKE256: begin
-              If (HashBits and $7) <> 0 then
-                raise Exception.Create('InitialSHA3State: HashBits must be divisible by 8.')
-              else
-                Result.HashBits := HashBits;
-            end;
-else
-  raise Exception.CreateFmt('InitialSHA3State: Unknown hash size (%d).',[Ord(HashSize)]);
-end;
-Result.BlockSize := GetBlockSize(HashSize);
-FillChar(Result.Sponge,SizeOf(Result.Sponge),0);
-end;
-
-//==============================================================================
-
-Function SHA3ToStr(Hash: TSHA3Hash): String;
-var
-  i:  Integer;
-begin
-SetLength(Result,Length(Hash.HashData) * 2);
-For i := Low(Hash.HashData) to High(Hash.HashData) do
-  begin
-    Result[(i * 2) + 1] := IntToHex(Hash.HashData[i],2)[1];
-    Result[(i * 2) + 2] := IntToHex(Hash.HashData[i],2)[2];
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-{$IFDEF FPCDWM}{$PUSH}W5092{$ENDIF}
-Function StrToSHA3(HashSize: TSHA3HashSize; Str: String): TSHA3Hash;
-var
-  HashCharacters: Integer;
-  i:              Integer;
-begin
-Result.HashSize := HashSize;
-case HashSize of
-  Keccak224, SHA3_224:  Result.HashBits := 224;
-  Keccak256, SHA3_256:  Result.HashBits := 256;
-  Keccak384, SHA3_384:  Result.HashBits := 384;
-  Keccak512, SHA3_512:  Result.HashBits := 512;
-  Keccak_b,
-  SHAKE128,
-  SHAKE256:  Result.HashBits := (Length(Str) shr 1) shl 3;
-else
-  raise Exception.CreateFmt('StrToSHA3: Unknown source hash size (%d).',[Ord(HashSize)]);
-end;
-HashCharacters := Result.HashBits shr 2;
-If Length(Str) < HashCharacters then
-  Str := StringOfChar('0',HashCharacters - Length(Str)) + Str
-else
-  If Length(Str) > HashCharacters then
-    Str := Copy(Str,Length(Str) - HashCharacters + 1,HashCharacters);
-SetLength(Result.HashData,Length(Str) shr 1);    
-For i := Low(Result.HashData) to High(Result.HashData) do
-  Result.HashData[i] := UInt8(StrToInt('$' + Copy(Str,(i * 2) + 1,2)));
-end;
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-
-//------------------------------------------------------------------------------
-
-Function TryStrToSHA3(HashSize: TSHA3HashSize; const Str: String; out Hash: TSHA3Hash): Boolean;
-begin
-try
-  Hash := StrToSHA3(HashSize,Str);
-  Result := True;
-except
-  Result := False;
-end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function StrToSHA3Def(HashSize: TSHA3HashSize; const Str: String; Default: TSHA3Hash): TSHA3Hash;
-begin
-If not TryStrToSHA3(HashSize,Str,Result) then
-  Result := Default;
-end;
-
-//------------------------------------------------------------------------------
-
-Function CompareSHA3(A,B: TSHA3Hash): Integer;
-var
-  i:  Integer;
-begin
-Result := 0;
-If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) and
-  (Length(A.HashData) = Length(B.HashData)) then
-  begin
-    For i := Low(A.HashData) to High(A.HashData) do
-      begin
-        If A.HashData[i] < B.HashData[i] then
-          begin
-            Result := -1;
-            Break;
-          end
-        else If A.HashData[i] > B.HashData[i] then
-          begin
-            Result := 1;
-            Break;
-          end;
-      end;
+    If not TryFromString(Str) then
+      SetHashBuffer(TKeccakVar(Default));
   end
-else raise Exception.Create('CompareSHA3: Cannot compare different hashes.');
+else raise ESHA3InvalidSize.CreateFmt('TSHAKE128Hash.FromStringDef: Size mismatch (%d, %d).',[Length(Str) div 2,Length(Default)]);
 end;
 
-//------------------------------------------------------------------------------
 
-Function SameSHA3(A,B: TSHA3Hash): Boolean;
-var
-  i:  Integer;
+{-------------------------------------------------------------------------------
+================================================================================
+                                  TSHAKE256Hash
+================================================================================
+-------------------------------------------------------------------------------}
+{===============================================================================
+    TSHAKE256Hash - class implementation
+===============================================================================}
+{-------------------------------------------------------------------------------
+    TSHAKE256Hash - protected methods
+-------------------------------------------------------------------------------}
+
+procedure TSHAKE256Hash.SetHashBits(Value: UInt32);
 begin
-Result := False;
-If (A.HashBits = B.HashBits) and (A.HashSize = B.HashSize) and
-  (Length(A.HashData) = Length(B.HashData)) then
-  begin
-    For i := Low(A.HashData) to High(A.HashData) do
-      If A.HashData[i] <> B.HashData[i] then Exit;
-    Result := True;
-  end;
+InitHashBits(Value);
+SetLength(fSHAKE256,HashSize);
+FillChar(fSHAKE256[0],Length(fSHAKE256),0);
+end;
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.CapacityFromHashBits(HashBits: UInt32): UInt32;
+begin
+Result := 512;  // capacity is static
 end;
 
 //------------------------------------------------------------------------------
 
-Function BinaryCorrectSHA3(Hash: TSHA3Hash): TSHA3Hash;
+Function TSHAKE256Hash.GetHashBuffer: TKeccakVar;
+begin
+Result := Copy(TKeccakVar(fSHAKE256));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSHAKE256Hash.SetHashBuffer(HashBuffer: TKeccakVar);
+begin
+If (Length(HashBuffer) > 0) then
+  begin
+    SetHashBits(Length(HashBuffer) * 8);
+    fSHAKE256 := Copy(TSHAKE256(HashBuffer));
+  end
+else raise ESHA3IncompatibleSize.CreateFmt('TSHAKE256Hash.SetHashBuffer: Incompatible size (%d).',[Length(HashBuffer)]);
+end;
+
+//------------------------------------------------------------------------------
+
+Function TSHAKE256Hash.GetSHAKE256: TSHAKE256;
+begin
+Result := Copy(fSHAKE256);
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSHAKE256Hash.Initialize;
+begin
+InitHashBits(256);
+inherited;
+SetLength(fSHAKE256,HashSize);
+end;
+
+{-------------------------------------------------------------------------------
+    TSHAKE256Hash - public methods
+-------------------------------------------------------------------------------}
+
+class Function TSHAKE256Hash.SHAKE256ToLE(SHAKE256: TSHAKE256): TSHAKE256;
+begin
+Result := Copy(SHAKE256);
+end;
+     
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.SHAKE256ToBE(SHAKE256: TSHAKE256): TSHAKE256;
+begin
+Result := Copy(SHAKE256);
+end;  
+     
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.SHAKE256FromLE(SHAKE256: TSHAKE256): TSHAKE256;
+begin
+Result := Copy(SHAKE256);
+end; 
+     
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.SHAKE256FromBE(SHAKE256: TSHAKE256): TSHAKE256;
+begin
+Result := Copy(SHAKE256);
+end; 
+     
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.HashName: String;
+begin
+Result := 'SHAKE256';
+end;  
+     
+//------------------------------------------------------------------------------
+
+class Function TSHAKE256Hash.HashFunction: TKeccakFunction;
+begin
+Result := fnSHAKE256;
+end;  
+     
+//------------------------------------------------------------------------------
+
+constructor TSHAKE256Hash.CreateAndInitFrom(Hash: THashBase);
+begin
+inherited CreateAndInitFrom(Hash);
+If Hash is TSHAKE256Hash then
+  begin
+    SetHashBits(TSHAKE256Hash(Hash).HashBits);
+    fSHAKE256 := TSHAKE256Hash(Hash).SHAKE256;
+  end
+else raise ESHA3IncompatibleClass.CreateFmt('TSHAKE256Hash.CreateAndInitFrom: Incompatible class (%s).',[Hash.ClassName]);
+end;
+
+//------------------------------------------------------------------------------
+
+constructor TSHAKE256Hash.CreateAndInitFrom(Hash: TKeccak);
+begin
+CreateAndInit;
+If Hash.HashFunction = HashFunction then
+  begin
+    SetHashBits(Hash.HashBits);
+    If (UInt32(Length(Hash.HashData)) = HashSize) then
+      fSHAKE256 := Copy(TSHAKE256(Hash.HashData))
+    else
+      raise ESHA3IncompatibleSize.CreateFmt('TSHAKE256Hash.CreateAndInitFrom: Incompatible size (%d).',[Length(Hash.HashData)]);
+  end
+else raise ESHA3IncompatibleFunction.CreateFmt('TSHAKE256Hash.CreateAndInitFrom: Incompatible function (%d).',[Ord(Hash.HashFunction)]);
+end;
+
+//------------------------------------------------------------------------------
+
+constructor TSHAKE256Hash.CreateAndInitFrom(Hash: TSHAKE256);
+begin
+CreateAndInit;
+SetHashBuffer(TKeccakVar(Hash));
+end;
+
+//------------------------------------------------------------------------------
+
+procedure TSHAKE256Hash.Init;
+begin
+inherited;
+If Length(fSHAKE256) > 0 then
+  FillChar(fSHAKE256[0],Length(fSHAKE256),0);
+end;
+     
+//------------------------------------------------------------------------------
+
+procedure TSHAKE256Hash.FromStringDef(const Str: String; const Default: TSHAKE256);
+begin
+If (Length(Str) div 2) = Length(Default) then
+  begin
+    If not TryFromString(Str) then
+      SetHashBuffer(TKeccakVar(Default));
+  end
+else raise ESHA3InvalidSize.CreateFmt('TSHAKE256Hash.FromStringDef: Size mismatch (%d, %d).',[Length(Str) div 2,Length(Default)]);
+end;
+
+
+{===============================================================================
+    Backward compatibility functions
+===============================================================================}
+{-------------------------------------------------------------------------------
+    Backward compatibility functions - auxiliary functions
+-------------------------------------------------------------------------------}
+
+Function GetBlockSize(HashFunction: TSHA3Function): UInt32;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  Result := Hash.BlockSize;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function InitialSHA3State(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3State;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  // following is here to catch invalid values
+  case HashFunction of
+    fnKeccakC:  TKeccakCHash(Hash).HashBits := HashBits;
+    fnSHAKE128: TSHAKE128Hash(Hash).HashBits := HashBits;
+    fnSHAKE256: TSHAKE256Hash(Hash).HashBits := HashBits;
+  end;
+  Result.HashFunction := HashFunction;
+  Result.HashBits := Hash.HashBits;
+  Result.Sponge := Hash.Sponge;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SHA3ToStr(SHA3: TSHA3): String;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateFromByFunction(SHA3);
+try
+  Result := Hash.AsString;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToSHA3(HashFunction: TSHA3Function; Str: String): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  Hash.FromString(Str);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end; 
+end;
+
+//------------------------------------------------------------------------------
+
+Function TryStrToSHA3(HashFunction: TSHA3Function; const Str: String; out SHA3: TSHA3): Boolean;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  Result := Hash.TryFromString(Str);
+  If Result then
+    SHA3 := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StrToSHA3Def(HashFunction: TSHA3Function; const Str: String; Default: TSHA3): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  Hash.FromStringDef(Str,Default);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function CompareSHA3(A,B: TSHA3): Integer;
+var
+  HashA:  TKeccakDefHash;
+  HashB:  TKeccakDefHash;
+begin
+HashA := BCF_CreateFromByFunction(A);
+try
+  HashB := BCF_CreateFromByFunction(B);
+  try
+    Result := HashA.Compare(HashB);
+  finally
+    HashB.Free;
+  end;
+finally
+  HashA.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function SameSHA3(A,B: TSHA3): Boolean;
+var
+  HashA:  TKeccakDefHash;
+  HashB:  TKeccakDefHash;
+begin
+HashA := BCF_CreateFromByFunction(A);
+try
+  HashB := BCF_CreateFromByFunction(B);
+  try
+    Result := HashA.Same(HashB);
+  finally
+    HashB.Free;
+  end;
+finally
+  HashA.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function BinaryCorrectSHA3(Hash: TSHA3): TSHA3;
 begin
 Result := Hash;
+SetLength(Result.HashData,Length(Result.HashData)); // this will create unique copy
 end;
 
-//==============================================================================
+{-------------------------------------------------------------------------------
+    Backward compatibility functions - processing functions
+-------------------------------------------------------------------------------}
 
 procedure BufferSHA3(var State: TSHA3State; const Buffer; Size: TMemSize);
 var
-  i:    TMemSize;
-  Buff: PUInt8;
+  Hash: TKeccakDefHash;
 begin
 If Size > 0 then
   begin
-    If (Size mod State.BlockSize) = 0 then
-      begin
-        Buff := @Buffer;
-        For i := 0 to Pred(Size div State.BlockSize) do
-          begin
-            BlockHash(State,Buff^);
-            Inc(Buff,State.BlockSize);
-          end;
-      end
-    else raise Exception.CreateFmt('BufferSHA3: Buffer size is not divisible by %d.',[State.BlockSize]);
-  end;
-end;
-
-//------------------------------------------------------------------------------
-
-Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3Hash;
-var
-  FullBlocks:     TMemSize;
-  LastBlockSize:  TMemSize;
-  HelpBlocks:     TMemSize;
-  HelpBlocksBuff: Pointer;
-begin
-FullBlocks := Size div State.BlockSize;
-If FullBlocks > 0 then BufferSHA3(State,Buffer,FullBlocks * State.BlockSize);
-LastBlockSize := Size - (UInt64(FullBlocks) * State.BlockSize);
-HelpBlocks := Ceil((LastBlockSize + 1) / State.BlockSize);
-HelpBlocksBuff := AllocMem(HelpBlocks * State.BlockSize);
-try
-{$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-  Move(Pointer(PtrUInt(@Buffer) + (FullBlocks * State.BlockSize))^,HelpBlocksBuff^,LastBlockSize);
-  case State.HashSize of
-    Keccak224..Keccak_b:  PUInt8(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $01;
-     SHA3_224..SHA3_512:  PUInt8(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $06;
-     SHAKE128..SHAKE256:  PUInt8(PtrUInt(HelpBlocksBuff) + LastBlockSize)^ := $1F;
-  else
-    raise Exception.CreateFmt('LastBufferSHA3: Unknown hash size (%d)',[Ord(State.HashSize)]);
-  end;
-  PUInt8(PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ := PUInt8(PtrUInt(HelpBlocksBuff) + (UInt64(HelpBlocks) * State.BlockSize) - 1)^ xor $80;
-  BufferSHA3(State,HelpBlocksBuff^,HelpBlocks * State.BlockSize);
-{$IFDEF FPCDWM}{$POP}{$ENDIF}
-finally
-  FreeMem(HelpBlocksBuff,HelpBlocks * State.BlockSize);
-end;
-PrepareHash(State,Result);
-If Length(Result.HashData) > 0 then
-  Squeeze(State,Addr(Result.HashData[0])^);
-end;
-
-//==============================================================================
-
-Function BufferSHA3(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
-begin
-Result := LastBufferSHA3(InitialSHA3State(HashSize,HashBits),Buffer,Size);
-end;
-
-//==============================================================================
-
-Function AnsiStringSHA3(HashSize: TSHA3HashSize; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3Hash;
-begin
-Result := BufferSHA3(HashSize,PAnsiChar(Str)^,Length(Str) * SizeOf(AnsiChar),HashBits);
-end;
-
-//------------------------------------------------------------------------------
-
-Function WideStringSHA3(HashSize: TSHA3HashSize; const Str: WideString; HashBits: UInt32 = 0): TSHA3Hash;
-begin
-Result := BufferSHA3(HashSize,PWideChar(Str)^,Length(Str) * SizeOf(WideChar),HashBits);
-end;
-
-//------------------------------------------------------------------------------
-
-Function StringSHA3(HashSize: TSHA3HashSize; const Str: String; HashBits: UInt32 = 0): TSHA3Hash;
-begin
-Result := BufferSHA3(HashSize,PChar(Str)^,Length(Str) * SizeOf(Char),HashBits);
-end;
-
-//==============================================================================
-
-Function StreamSHA3(HashSize: TSHA3HashSize; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3Hash;
-var
-  Buffer:     Pointer;
-  BytesRead:  UInt32;
-  State:      TSHA3State;
-  BufferSize: UInt32;
-begin
-If Assigned(Stream) then
-  begin
-    If Count = 0 then
-      Count := Stream.Size - Stream.Position;
-    If Count < 0 then
-      begin
-        Stream.Position := 0;
-        Count := Stream.Size;
-      end;
-  {$IFDEF LargeBuffer}
-    BufferSize := ($100000 div GetBlockSize(HashSize)) * GetBlockSize(HashSize);
-  {$ELSE}
-    BufferSize := ($1000 div GetBlockSize(HashSize)) * GetBlockSize(HashSize);
-  {$ENDIF}
-    GetMem(Buffer,BufferSize);
+    Hash := BCF_CreateByFunction(State.HashFunction);
     try
-      State := InitialSHA3State(HashSize,HashBits);
-      repeat
-        BytesRead := Stream.Read(Buffer^,Min(BufferSize,Count));
-        If BytesRead < BufferSize then
-          Result := LastBufferSHA3(State,Buffer^,BytesRead)
-        else
-          BufferSHA3(State,Buffer^,BytesRead);
-        Dec(Count,BytesRead);
-      until BytesRead < BufferSize;
+      If (Size mod Hash.BlockSize) = 0 then
+        begin
+          If (Hash is TKeccakVarHash) and (State.HashBits <> 0) then
+            TKeccakVarHash(Hash).HashBits := State.HashBits;
+          Hash.Sponge := State.Sponge;
+          Hash.Update(Buffer,Size);
+          State.Sponge := Hash.Sponge;
+        end
+      else raise ESHA3ProcessingError.CreateFmt('BufferSHA3: Buffer size (%d) is not divisible by %d.',[Size,Hash.BlockSize]);
     finally
-      FreeMem(Buffer,BufferSize);
+      Hash.Free;
     end;
-  end
-else raise Exception.Create('StreamSHA3: Stream is not assigned.');
+  end;
 end;
 
 //------------------------------------------------------------------------------
 
-Function FileSHA3(HashSize: TSHA3HashSize; const FileName: String; HashBits: UInt32 = 0): TSHA3Hash;
+Function LastBufferSHA3(State: TSHA3State; const Buffer; Size: TMemSize): TSHA3;
 var
-  FileStream: TFileStream;
+  Hash: TKeccakDefHash;
 begin
-FileStream := TFileStream.Create(StrToRTL(FileName), fmOpenRead or fmShareDenyWrite);
+Hash := BCF_CreateByFunction(State.HashFunction);
 try
-  Result := StreamSHA3(HashSize,FileStream,-1,HashBits);
+  If (Hash is TKeccakVarHash) and (State.HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := State.HashBits;
+  Hash.Sponge := State.Sponge;
+  Hash.Final(Buffer,Size);
+  Result := Hash.Keccak;
 finally
-  FileStream.Free;
+  Hash.Free;
 end;
 end;
 
-//==============================================================================
+//------------------------------------------------------------------------------
 
-Function SHA3_Init(HashSize: TSHA3HashSize; HashBits: UInt32 = 0): TSHA3Context;
+Function BufferSHA3(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3; overload;
+var
+  Hash: TKeccakDefHash;
 begin
-Result := AllocMem(SizeOf(TSHA3Context_Internal));
-with PSHA3Context_Internal(Result)^ do
-  begin
-    HashState := InitialSHA3State(HashSize,HashBits);
-    TransferSize := 0;
-  end;
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashBuffer(Buffer,Size);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function AnsiStringSHA3(HashFunction: TSHA3Function; const Str: AnsiString; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashAnsiString(Str);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+ 
+//------------------------------------------------------------------------------
+
+Function WideStringSHA3(HashFunction: TSHA3Function; const Str: WideString; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashWideString(Str);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+  
+//------------------------------------------------------------------------------
+
+Function StringSHA3(HashFunction: TSHA3Function; const Str: String; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashString(Str);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function StreamSHA3(HashFunction: TSHA3Function; Stream: TStream; Count: Int64 = -1; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashStream(Stream,Count);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+//------------------------------------------------------------------------------
+
+Function FileSHA3(HashFunction: TSHA3Function; const FileName: String; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
+begin
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashFile(FileName);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
+end;
+end;
+
+{-------------------------------------------------------------------------------
+    Backward compatibility functions - context functions
+-------------------------------------------------------------------------------}
+
+Function SHA3_Init(HashFunction: TSHA3Function; HashBits: UInt32 = 0): TSHA3Context;
+var
+  Temp: TKeccakDefHash;
+begin
+Temp := BCF_CreateByFunction(HashFunction);
+If (Temp is TKeccakVarHash) and (HashBits <> 0) then
+  TKeccakVarHash(Temp).HashBits := HashBits;
+Temp.Init;
+Result := TSHA3Context(Temp);
 end;
 
 //------------------------------------------------------------------------------
 
 procedure SHA3_Update(Context: TSHA3Context; const Buffer; Size: TMemSize);
-var
-  FullBlocks:     TMemSize;
-  RemainingSize:  TMemSize;
 begin
-with PSHA3Context_Internal(Context)^ do
-  begin
-    If TransferSize > 0 then
-      begin
-        If Size >= (HashState.BlockSize - TransferSize) then
-          begin
-            Move(Buffer,TransferBuffer[TransferSize],HashState.BlockSize - TransferSize);
-            BufferSHA3(HashState,TransferBuffer,HashState.BlockSize);
-            RemainingSize := Size - (HashState.BlockSize - TransferSize);
-            TransferSize := 0;
-          {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-            SHA3_Update(Context,Pointer(PtrUInt(@Buffer) + (Size - RemainingSize))^,RemainingSize);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
-          end
-        else
-          begin
-            Move(Buffer,TransferBuffer[TransferSize],Size);
-            Inc(TransferSize,Size);
-          end;  
-      end
-    else
-      begin
-        FullBlocks := Size div HashState.BlockSize;
-        BufferSHA3(HashState,Buffer,FullBlocks * HashState.BlockSize);
-        If (FullBlocks * HashState.BlockSize) < Size then
-          begin
-            TransferSize := Size - (UInt64(FullBlocks) * HashState.BlockSize);
-          {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-            Move(Pointer(PtrUInt(@Buffer) + (Size - TransferSize))^,TransferBuffer,TransferSize);
-          {$IFDEF FPCDWM}{$POP}{$ENDIF}
-          end;
-      end;
-  end;
+TKeccakDefHash(Context).Update(Buffer,Size);
 end;
 
 //------------------------------------------------------------------------------
 
-Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3Hash;
+Function SHA3_Final(var Context: TSHA3Context; const Buffer; Size: TMemSize): TSHA3;
 begin
 SHA3_Update(Context,Buffer,Size);
 Result := SHA3_Final(Context);
 end;
-
+ 
 //------------------------------------------------------------------------------
 
-Function SHA3_Final(var Context: TSHA3Context): TSHA3Hash;
+Function SHA3_Final(var Context: TSHA3Context): TSHA3;
 begin
-with PSHA3Context_Internal(Context)^ do
-  Result := LastBufferSHA3(HashState,TransferBuffer,TransferSize);
-FreeMem(Context,SizeOf(TSHA3Context_Internal));
-Context := nil;
+TKeccakDefHash(Context).Final;
+Result := TKeccakDefHash(Context).Keccak;
+FreeAndNil(TKeccakDefHash(Context));
 end;
-
+ 
 //------------------------------------------------------------------------------
 
-Function SHA3_Hash(HashSize: TSHA3HashSize; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3Hash;
+Function SHA3_Hash(HashFunction: TSHA3Function; const Buffer; Size: TMemSize; HashBits: UInt32 = 0): TSHA3;
+var
+  Hash: TKeccakDefHash;
 begin
-Result := LastBufferSHA3(InitialSHA3State(HashSize,HashBits),Buffer,Size);
+Hash := BCF_CreateByFunction(HashFunction);
+try
+  If (Hash is TKeccakVarHash) and (HashBits <> 0) then
+    TKeccakVarHash(Hash).HashBits := HashBits;
+  Hash.HashBuffer(Buffer,Size);
+  Result := Hash.Keccak;
+finally
+  Hash.Free;
 end;
-*)
+end;
+
 end.
 
