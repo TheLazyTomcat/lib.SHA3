@@ -200,7 +200,8 @@ type
 
   TKeccakSponge = packed array[0..4,0..4] of TKeccakWord;
 
-  TKeccakSpongeOverlay = packed array[0..24] of TKeccakWord;  // only used internally
+  TKeccakSpongeWordOverlay = packed array[0..24] of TKeccakWord;
+  TKeccakSpongeByteOverlay = packed array[0..Pred(25 * SizeOf(TKeccakWord))] of UInt8;  
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -820,8 +821,8 @@ Function EndianSwap(Sponge: TKeccakSponge): TKeccakSponge; overload;
 var
   i:  Integer;
 begin
-For i := Low(TKeccakSpongeOverlay) to High(TKeccakSpongeOverlay) do
-  TKeccakSpongeOverlay(Result)[i] := EndianSwap(TKeccakSpongeOverlay(Sponge)[i]);
+For i := Low(TKeccakSpongeWordOverlay) to High(TKeccakSpongeWordOverlay) do
+  TKeccakSpongeWordOverlay(Result)[i] := EndianSwap(TKeccakSpongeWordOverlay(Sponge)[i]);
 end;
 
 //------------------------------------------------------------------------------
@@ -1171,13 +1172,33 @@ end;
 
 procedure TKeccakHash.ProcessBlock(const Block);
 var
-  i:    Integer;
-  Buff: TKeccakSpongeOverlay absolute Block;
+  WBuff:      TKeccakSpongeWordOverlay absolute Block;
+  BBuff:      TKeccakSpongeByteOverlay absolute Block;
+  i:          Integer;
+{$IFDEF ENDIAN_BIG}
+  TempSponge: TKeccakSponge;
+{$ENDIF}
 begin
-{$message 'hey, blocks must be multiple of words if this has to work correctly..'}
-For i := 0 to Pred(fBlockSize div 8) do
-  TKeccakSpongeOverlay(fSponge)[i] := TKeccakSpongeOverlay(fSponge)[i] xor
-    {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(Buff[i]);
+If (fBlockSize mod SizeOf(TKeccakWord)) = 0 then
+  begin
+    For i := 0 to Pred(fBlockSize div SizeOf(TKeccakWord)) do
+      TKeccakSpongeWordOverlay(fSponge)[i] := TKeccakSpongeWordOverlay(fSponge)[i] xor
+    {$IFDEF ENDIAN_BIG}EndianSwap{$ENDIF}(WBuff[i]);
+  end
+else  
+  begin
+  {$IFDEF ENDIAN_BIG}
+    TempSponge := EndianSwap(fSponge);
+    For i := 0 to Pred(fBlockSize) do
+      TKeccakSpongeByteOverlay(TempSponge)[i] :=
+        TKeccakSpongeByteOverlay(TempSponge)[i] xor BBuff[i];
+    fSponge := EndianSwap(TempSponge);
+  {$ELSE}
+    For i := 0 to Pred(fBlockSize) do
+      TKeccakSpongeByteOverlay(fSponge)[i] :=
+        TKeccakSpongeByteOverlay(fSponge)[i] xor BBuff[i];
+  {$ENDIF}
+  end;
 Permute;
 end;
 
@@ -2747,7 +2768,7 @@ end;
 
 procedure TKeccakCHash.Initialize;
 begin
-InitHashBits(256);  // capacity is set to default value
+InitHashBits(KECCAK_DEFAULT_CAPACITY);  // capacity is also set to default value
 inherited;
 SetLength(fKeccakC,HashSize);
 end;
@@ -3236,11 +3257,12 @@ begin
 Hash := BCF_CreateByFunction(HashFunction);
 try
   // following is here to catch invalid values
-  case HashFunction of
-    fnKeccakC:  TKeccakCHash(Hash).HashBits := HashBits;
-    fnSHAKE128: TSHAKE128Hash(Hash).HashBits := HashBits;
-    fnSHAKE256: TSHAKE256Hash(Hash).HashBits := HashBits;
-  end;
+  If HashBits <> 0 then
+    case HashFunction of
+      fnKeccakC:  TKeccakCHash(Hash).HashBits := HashBits;
+      fnSHAKE128: TSHAKE128Hash(Hash).HashBits := HashBits;
+      fnSHAKE256: TSHAKE256Hash(Hash).HashBits := HashBits;
+    end;
   Result.HashFunction := HashFunction;
   Result.HashBits := Hash.HashBits;
   Result.Sponge := Hash.Sponge;
