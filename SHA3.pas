@@ -7,106 +7,148 @@
 -------------------------------------------------------------------------------}
 {===============================================================================
 
-  KECCAK-p[b,Nr] is a generalization of KECCAK-f[b] with number of rounds as an
-  input parameter.
+  SHA-3/Keccak calculation
 
-  b = width of keccak permutation in bits
-  f = the generic underlying function for the sponge construction
+    This unit provides a mean of calculating SHA-3 hash of pretty much any data.
+    The only limiting factor is, that the data must consist of whole bytes, ie.
+    arbitrary bitstrings are not supported. SHA-3 is based on Keccak, so it is
+    provided in limited form too.
 
-  Nr = 2L + 12   (number of rounds in keccak permutations)
-  L = log2(w)
-  w = width of a word (in keccak terminology - size of a sponge lane, in bits),
-      in this case 64
+    As SHA-3 is derived from Keccak-f[1600] (permutation width of 1600 bits,
+    64bit lanes/words), all hashes provided here are also based on this
+    permutation. To be more specific, everything is based on Keccak-p[1600,24],
+    a generalization of Keccak-f[1600] with 24 rounds per permutation (number
+    of rounds Nr = 12 + 2L, where L = log2(w), w is width of a keccak word, or,
+    in keccak terminology, a lane size).
 
+    Let's have following sponge function:
 
-  KECCAK[c] = SPONGE[KECCAK-p[1600,24], pad10*1, 1600–c]
-  
-  SHA3-224(M) = KECCAK[448](M || 01, 224)
-  SHA3-256(M) = KECCAK[512](M || 01, 256)
-  SHA3-384(M) = KECCAK[768](M || 01, 384)
-  SHA3-512(M) = KECCAK[1024](M || 01, 512)
+        SPONGE[f,pad,r]
 
-  RawSHAKE128(M, d) = KECCAK[256] (M || 11, d)
-  RawSHAKE256(M, d) = KECCAK[512] (M || 11, d)
+            f   - underlying sponge function (permutation function)
+            pad - padding rule or algorithm for input (padding to block boundary)
+            r   - (bit)rate of the sponge function (defines size of input block)
 
-  SHAKE128(M, d) = RawSHAKE128 (M || 11, d)   SHAKE128(M, d) = KECCAK[256](M || 1111, d)
-  SHAKE256(M, d) = RawSHAKE256 (M || 11, d)   SHAKE256(M, d) = KECCAK[512](M || 1111, d)
+    Then we can define Keccak[c] as this:
 
-  d = requested length of a hash, in bits
-  M = the input message to a SHA-3 function
+        Keccak[c] = SPONGE[Keccak-p[1600.24],pad10*1,1600-c]
 
-  Keccak-f[b]
+            c - capacity of the sponge function
 
-  b = width of the permutation = 25 (5x5 sponge) * width of keccak word in bits (here 64)
+    pad10*1 (multi-rate padding) pretty much adds one 1 bit at the end of the
+    message, followed by none or more zeroes. The block is then closed by 1 bit.
 
-  b = r + c
+    Using all this, any of the implemented function can be described by
+    following formula:
 
-  r = (bit)rate of sponge function = size of block in bits
-  c = capacity of sponge function = size of hash in bits (default is 576)
-  
-  Keccak[c] (underlying is Keccak-f[1600])
+        Function(M) = Keccak[c](M||pad,d)
 
+            M   - input message (data) that will be hashed
+            pad - optional padding bits beyond original pad10*1 padding (added
+                  before the original padding bits)
+            d   - number of bits in the output digest (hash)
 
-   *TBlockHash --- *TKeccakHash --- TKeccak0Hash
-                                 |
-                                 |- *TKeccakDefinedHash --- TKeccak224Hash
-                                                         |- TKeccak256Hash
-                                                         |- TKeccak384Hash
-                                                         |- TKeccak512Hash
-                                                         |
-                                                         |- TKeccak_CHash
-                                                         |
-                                                         |- *TSHA3Hash  --- TSHA3_224Hash
-                                                         |               |- TSHA3_256Hash
-                                                         |               |- TSHA3_384Hash
-                                                         |               |- TSHA3_512Hash
-                                                         |
-                                                         |- *TSHAKEHash --- TSHAKE128Hash
-                                                                         |- TSHAKE256Hash
+    Following twelve functions, or hash variants, are implemented and therefore
+    supported by this library:
 
+        Keccak[]            SHA3-224
+        Keccak224           SHA3-256
+        Keccak256           SHA3-384
+        Keccak384           SHA3-512
+        Keccak512           SHAKE128
+        Keccak[c]           SHAKE256
 
-    *TKeccakHash --- TKeccak0Hash
-                  |
-                  |- *TKeccakDefHash --- *TKeccakFixHash --- TKeccak224Hash
-                                      |                   |- TKeccak256Hash
-                                      |                   |- TKeccak384Hash
-                                      |                   |- TKeccak512Hash
-                                      |                   |
-                                      |                   |- *TSHA3Hash ---- TSHA3_224Hash
-                                      |                                   |- TSHA3_256Hash
-                                      |                                   |- TSHA3_384Hash
-                                      |                                   |- TSHA3_512Hash
-                                      |
-                                      |- *TKeccakVarHash --- TKeccakCHash
-                                                          |
-                                                          |- *TSHAKEHash --- TSHAKE128Hash
-                                                                          |- TSHAKE256Hash
+    Each variant is implemeted in its own class. They all share the same
+    interface inherited from TBlockHash, but each provides some specialized
+    methods and properties.
+    Inheritance tree of all present class looks like this (star marks an
+    abstract class, these must not be directly instantiated):
 
+      *TKeccakHash --- TKeccak0Hash
+                    |
+                    |- *TKeccakDefHash --- *TKeccakFixHash --- TKeccak224Hash
+                                        |                   |- TKeccak256Hash
+                                        |                   |- TKeccak384Hash
+                                        |                   |- TKeccak512Hash
+                                        |                   |
+                                        |                   |- *TSHA3Hash ---- TSHA3_224Hash
+                                        |                                   |- TSHA3_256Hash
+                                        |                                   |- TSHA3_384Hash
+                                        |                                   |- TSHA3_512Hash
+                                        |
+                                        |- *TKeccakVarHash --- TKeccakCHash
+                                                            |
+                                                            |- *TSHAKEHash --- TSHAKE128Hash
+                                                                            |- TSHAKE256Hash
 
-  SHA3/Keccak hash calculation
+    Keccak[], in this library denoted as Keccak0, is a special case as it does
+    not produce any hash. Instead, it has public methods Permute and Squeeze
+    which can be used to produce output. It is intended to be used for other
+    purposes than hashing, for example as a base for a pseudo-random number
+    generator. It is defined as (note 576 is a default capacity for Keccak):
 
-  ©František Milt 2018-10-22
+        Keccak[](M) = Keccak[576](M,0)
 
-  Version 1.1.6
+    Keccak224 trough Keccak512 are defined as:
 
-  Following hash variants are supported in current implementation:
-    Keccak224
-    Keccak256
-    Keccak384
-    Keccak512
-    Keccak[] (in this library marked as Keccak_b)
-    SHA3-224
-    SHA3-256
-    SHA3-384
-    SHA3-512
-    SHAKE128
-    SHAKE256
+        Keccak224(M) = Keccak[448](M,224)
+        Keccak256(M) = Keccak[512](M,256)
+        Keccak384(M) = Keccak[768](M,384)
+        Keccak512(M) = Keccak[1024](M,512)
+
+    Keccak[c] is, again, a special case. Both capacity and hash length can be
+    selected independetly. Capacity can be anything from 8 to 1592. Hash bits
+    must be larger than zero, other than that they are limited only by available
+    memory. Thanks to this, Keccak[c] can be treated as an XOF - an
+    eXtendable-Output Function.
+    Defining this function from previous formula has no meaning, as it is fully
+    parametrized. It can be viewed as a direct implementation of this
+    generalization.
+
+    SHA-3 family of functions differ only slightly from the original Keccak.
+    They append few more bits to the message and sets capacity to double of the
+    hash length in bits. The functions are defined:
+
+        SHA3-224(M) = Keccak[448](M||01,224)
+        SHA3-256(M) = Keccak[512](M||01,256)
+        SHA3-384(M) = Keccak[768](M||01,384)
+        SHA3-512(M) = Keccak[1024](M||01,512)
+
+    SHAKE functions are extendable-output functions, meaning they produce
+    variable length hash, of which length can be selected before hashing.
+    They can be defined:
+
+        SHAKE128(M,d) = KECCAK[256](M||1111,d)
+        SHAKE256(M,d) = KECCAK[512](M||1111,d)
+
+  Version 1.2 (2020-05-13)
+
+  Last change 2020-05-13
+
+  ©2015-2020 František Milt
+
+  Contacts:
+    František Milt: frantisek.milt@gmail.com
+
+  Support:
+    If you find this code useful, please consider supporting its author(s) by
+    making a small donation using the following link(s):
+
+      https://www.paypal.me/FMilt
+
+  Changelog:
+    For detailed changelog and history please refer to this git repository:
+
+      github.com/TheLazyTomcat/Lib.SHA3
 
   Dependencies:
-    AuxTypes    - github.com/ncs-sniper/Lib.AuxTypes
-    StrRect     - github.com/ncs-sniper/Lib.StrRect
-    BitOps      - github.com/ncs-sniper/Lib.BitOps
-  * SimpleCPUID - github.com/ncs-sniper/Lib.SimpleCPUID
+    AuxTypes           - github.com/TheLazyTomcat/Lib.AuxTypes
+    HashBase           - github.com/TheLazyTomcat/Lib.HashBase
+    AuxClasses         - github.com/TheLazyTomcat/Lib.AuxClasses
+    StrRect            - github.com/TheLazyTomcat/Lib.StrRect
+    StaticMemoryStream - github.com/TheLazyTomcat/Lib.StaticMemoryStream
+    BitOps             - github.com/TheLazyTomcat/Lib.BitOps
+  * SimpleCPUID        - github.com/TheLazyTomcat/Lib.SimpleCPUID
 
   SimpleCPUID might not be needed, see BitOps library for details.
 
@@ -1565,7 +1607,7 @@ end;
 class Function TKeccakFixHash.CapacityFromHashBits(HashBits: UInt32): UInt32;
 begin
 If (HashBits > 0) and ((HashBits * 2) < PermutationWidth) then
-  Result := HashBits * 2 {$message '!?'}
+  Result := HashBits * 2
 else
   raise ESHA3InvalidHashBits.CreateFmt('TKeccakFixHash.CapacityFromHashBits: Invalid hash bits (%d).',[HashBits]);
 end;
@@ -3395,6 +3437,7 @@ var
 begin
 HashA := BCF_CreateFromByFunction(A);
 try
+  Result := 0;  // don't ask me, ask Delphi...
   HashB := BCF_CreateFromByFunction(B);
   try
     Result := HashA.Compare(HashB);
@@ -3415,6 +3458,7 @@ var
 begin
 HashA := BCF_CreateFromByFunction(A);
 try
+  Result := False;
   HashB := BCF_CreateFromByFunction(B);
   try
     Result := HashA.Same(HashB);
