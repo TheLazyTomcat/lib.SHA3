@@ -121,9 +121,9 @@
         SHAKE128(M,d) = KECCAK[256](M||1111,d)
         SHAKE256(M,d) = KECCAK[512](M||1111,d)
 
-  Version 1.2 (2020-05-13)
+  Version 1.2.1 (2020-07-13)
 
-  Last change 2020-05-13
+  Last change 2020-07-13
 
   ©2015-2020 František Milt
 
@@ -308,6 +308,7 @@ type
     class Function PermutationWidth: UInt32; virtual; // in bits  
     Function HashSize: TMemSize; reintroduce;         // hides class functions
     class Function HashEndianness: THashEndianness; override;
+    class Function HashFinalization: Boolean; override;
     class Function HashFunction: TKeccakFunction; virtual; abstract;
     constructor CreateAndInitFrom(Hash: THashBase); overload; override;
     constructor CreateAndInitFrom(Hash: TKeccak); overload; virtual; abstract;
@@ -1297,33 +1298,33 @@ end;
 
 procedure TKeccakHash.ProcessLast;
 begin
-If fTempCount < fBlockSize then
+If fTransCount < fBlockSize then
   begin
     // padding can fit
   {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-    FillChar(Pointer(PtrUInt(fTempBlock) + PtrUInt(fTempCount))^,fBlockSize - fTempCount,0);
-    PUInt8(PtrUInt(fTempBlock) + PtrUInt(fTempCount))^ := PaddingByte;
-    PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ :=
-      PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ or $80;
+    FillChar(Pointer(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^,fBlockSize - fTransCount,0);
+    PUInt8(PtrUInt(fTransBlock) + PtrUInt(fTransCount))^ := PaddingByte;
+    PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ :=
+      PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ or $80;
   {$IFDEF FPCDWM}{$POP}{$ENDIF}
-    ProcessBlock(fTempBlock^);
+    ProcessBlock(fTransBlock^);
     Squeeze;
   end
 else
   begin
     // padding cannot fit
-    If fTempCount = fBlockSize then
+    If fTransCount = fBlockSize then
       begin
-        ProcessBlock(fTempBlock^);
+        ProcessBlock(fTransBlock^);
       {$IFDEF FPCDWM}{$PUSH}W4055 W4056{$ENDIF}
-        FillChar(fTempBlock^,fBlockSize,0);
-        PUInt8(fTempBlock)^ := PaddingByte;
-        PUInt8(PtrUInt(fTempBlock) - 1 + PtrUInt(fBlockSize))^ := $80;
+        FillChar(fTransBlock^,fBlockSize,0);
+        PUInt8(fTransBlock)^ := PaddingByte;
+        PUInt8(PtrUInt(fTransBlock) - 1 + PtrUInt(fBlockSize))^ := $80;
       {$IFDEF FPCDWM}{$POP}{$ENDIF}
-        ProcessBlock(fTempBlock^);
+        ProcessBlock(fTransBlock^);
         Squeeze;
       end
-    else raise ESHA3ProcessingError.CreateFmt('TKeccakHash.ProcessLast: Invalid data transfer (%d).',[fTempCount]);
+    else raise ESHA3ProcessingError.CreateFmt('TKeccakHash.ProcessLast: Invalid data transfer (%d).',[fTransCount]);
   end;
 end;
 
@@ -1376,6 +1377,13 @@ end;
 class Function TKeccakHash.HashEndianness: THashEndianness;
 begin
 Result := heBig;
+end;
+
+//------------------------------------------------------------------------------
+
+class Function TKeccakHash.HashFinalization: Boolean;
+begin
+Result := True;
 end;
 
 //------------------------------------------------------------------------------
@@ -2826,7 +2834,7 @@ If ((Value mod 8) = 0) and (Value > 0) and (Value < PermutationWidth) then
   begin
     fCapacity := Value;
     fBlockSize := Bitrate div 8;
-    ReallocMem(fTempBlock,fBlockSize);
+    ReallocMem(fTransBlock,fBlockSize);
   end
 else raise ESHA3InvalidCapacity.CreateFmt('TKeccakCHash.SetCapacity: Invalid capacity (%d).',[Value]);
 end;
@@ -3492,6 +3500,7 @@ If Size > 0 then
     try
       If (Size mod Hash.BlockSize) = 0 then
         begin
+          Hash.Init;
           If (Hash is TKeccakVarHash) and (State.HashBits <> 0) then
             TKeccakVarHash(Hash).HashBits := State.HashBits;
           Hash.Sponge := State.Sponge;
@@ -3513,6 +3522,7 @@ var
 begin
 Hash := BCF_CreateByFunction(State.HashFunction);
 try
+  Hash.Init;
   If (Hash is TKeccakVarHash) and (State.HashBits <> 0) then
     TKeccakVarHash(Hash).HashBits := State.HashBits;
   Hash.Sponge := State.Sponge;
