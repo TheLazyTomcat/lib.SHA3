@@ -123,7 +123,7 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2020-07-13
+  Last change 2020-08-02
 
   ©2015-2020 František Milt
 
@@ -176,6 +176,8 @@ unit SHA3;
     {$UNDEF CanInline}
   {$IFEND}
 {$ENDIF}
+{$H+}
+
 interface
 
 uses
