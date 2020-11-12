@@ -123,7 +123,7 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2020-08-02
+  Last change 2020-11-12
 
   ©2015-2020 František Milt
 
@@ -156,11 +156,11 @@
 unit SHA3;
 
 {$IF defined(CPU64) or defined(CPU64BITS)}
-  {$DEFINE 64bit}
+  {$DEFINE CPU64bit}
 {$ELSEIF defined(CPU16)}
   {$MESSAGE FATAL '16bit CPU not supported'}
 {$ELSE}
-  {$DEFINE 32bit}
+  {$DEFINE CPU32bit}
 {$IFEND}
 
 {$IFDEF FPC}
@@ -1209,7 +1209,7 @@ var
   {$IFDEF FPCDWM}{$PUSH}W6018{$ENDIF}
   Function Min(A,B: TMemSize): TMemSize;
   begin
-  {$IFDEF 64bit}
+  {$IFDEF CPU64bit}
     If not AuxTypes.NativeUInt64 then
       begin
         If Int64Rec(A).Hi < Int64Rec(B).Hi then
