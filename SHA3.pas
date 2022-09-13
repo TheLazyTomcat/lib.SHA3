@@ -123,9 +123,9 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2020-11-12
+  Last change 2022-09-13
 
-  ©2015-2020 František Milt
+  ©2015-2022 František Milt
 
   Contacts:
     František Milt: frantisek.milt@gmail.com
@@ -392,9 +392,8 @@ type
 ===============================================================================}
 type
   TKeccak224Hash = class(TKeccakFixHash)
-  private
-    fKeccak224: TKeccak224;
   protected
+    fKeccak224: TKeccak224;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -423,9 +422,8 @@ type
 ===============================================================================}
 type
   TKeccak256Hash = class(TKeccakFixHash)
-  private
-    fKeccak256: TKeccak256;
   protected
+    fKeccak256: TKeccak256;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -454,9 +452,8 @@ type
 ===============================================================================}
 type
   TKeccak384Hash = class(TKeccakFixHash)
-  private
-    fKeccak384: TKeccak384;
   protected
+    fKeccak384: TKeccak384;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -485,9 +482,8 @@ type
 ===============================================================================}
 type
   TKeccak512Hash = class(TKeccakFixHash)
-  private
-    fKeccak512: TKeccak512;
   protected
+    fKeccak512: TKeccak512;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -533,9 +529,8 @@ type
 ===============================================================================}
 type
   TSHA3_224Hash = class(TSHA3Hash)
-  private
-    fSHA3_224: TSHA3_224;
   protected
+    fSHA3_224: TSHA3_224;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -564,9 +559,8 @@ type
 ===============================================================================}
 type
   TSHA3_256Hash = class(TSHA3Hash)
-  private
-    fSHA3_256: TSHA3_256;
   protected
+    fSHA3_256: TSHA3_256;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -595,9 +589,8 @@ type
 ===============================================================================}
 type
   TSHA3_384Hash = class(TSHA3Hash)
-  private
-    fSHA3_384: TSHA3_384;
   protected
+    fSHA3_384: TSHA3_384;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -626,9 +619,8 @@ type
 ===============================================================================}
 type
   TSHA3_512Hash = class(TSHA3Hash)
-  private
-    fSHA3_512: TSHA3_512;
   protected
+    fSHA3_512: TSHA3_512;
     Function GetHashBuffer: TKeccakVar; override;
     procedure SetHashBuffer(HashBuffer: TKeccakVar); override;
     procedure Initialize; override;
@@ -675,9 +667,8 @@ type
 ===============================================================================}
 type
   TKeccakCHash = class(TKeccakVarHash)
-  private
-    fKeccakC: TKeccakC;
   protected
+    fKeccakC: TKeccakC;
     procedure SetHashBits(Value: UInt32); override;
     procedure SetCapacity(Value: UInt32); virtual;
     Function GetHashBuffer: TKeccakVar; override;
@@ -725,9 +716,8 @@ type
 ===============================================================================}
 type
   TSHAKE128Hash = class(TSHAKEHash)
-  private
-    fSHAKE128:  TSHAKE128;
   protected
+    fSHAKE128:  TSHAKE128;
     procedure SetHashBits(Value: UInt32); override;
     class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
     Function GetHashBuffer: TKeccakVar; override;
@@ -760,9 +750,8 @@ type
 ===============================================================================}
 type
   TSHAKE256Hash = class(TSHAKEHash)
-  private
-    fSHAKE256:  TSHAKE256;
   protected
+    fSHAKE256:  TSHAKE256;
     procedure SetHashBits(Value: UInt32); override;
     class Function CapacityFromHashBits(HashBits: UInt32): UInt32; override;
     Function GetHashBuffer: TKeccakVar; override;
