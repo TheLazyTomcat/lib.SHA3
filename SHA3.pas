@@ -123,7 +123,7 @@
 
   Version 1.2.1 (2020-07-13)
 
-  Last change 2022-09-13
+  Last change 2022-09-24
 
   ©2015-2022 František Milt
 
@@ -164,7 +164,8 @@ unit SHA3;
 {$IFEND}
 
 {$IFDEF FPC}
-  {$MODE Delphi}
+  {$MODE ObjFPC}
+  {$MODESWITCH DuplicateLocals+}
   {$INLINE ON}
   {$DEFINE CanInline}
   {$DEFINE FPC_DisableWarns}
